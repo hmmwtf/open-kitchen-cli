@@ -190,7 +190,7 @@ describe("Provider Adapter v1", () => {
       },
       {
         prompt: "What are the important files in this project?",
-        expected: ["Important files output", "File | Purpose | Reason", "Maximum 5 rows"]
+        expected: ["Important files output", "File | Purpose | Reason", "Choose files only from Important Files Evidence or Repository Context Map", "Do not invent files"]
       },
       {
         prompt: "Write a pitch for OpenKitchen.",

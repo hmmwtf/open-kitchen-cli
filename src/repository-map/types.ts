@@ -2,7 +2,7 @@ import type { ModeName } from "../core/types.js";
 
 export type RepositoryMapStatus = "generated" | "skipped" | "failed";
 export type RepositoryMapStrategy = "typescript_static_mvp";
-export type AnchorIntent = "generic" | "architecture" | "provider" | "repomap" | "bug" | "pitch" | "cli";
+export type AnchorIntent = "generic" | "architecture" | "provider" | "repomap" | "bug" | "important-files" | "pitch" | "cli";
 export type AnchorBugDomain = "repomap" | "provider" | "process-runner" | "run-controller" | "cli" | "generic";
 
 export interface RepositoryContextSummary {

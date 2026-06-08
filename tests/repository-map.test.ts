@@ -2,7 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { generateRepositoryMap } from "../src/repository-map/repository-map.js";
+import { detectAnchorIntent, generateRepositoryMap } from "../src/repository-map/repository-map.js";
 
 describe("Repository Context Map", () => {
   it("extracts TypeScript symbols, imports, exports, and respects ignored directories", async () => {
@@ -266,6 +266,77 @@ describe("Repository Context Map", () => {
 
     expect(repoMap.markdown).toContain("src/agents/adapter.ts");
     expect(repoMap.markdown).toContain("## Context Anchors");
+  });
+
+  it("selects purpose-built important files evidence anchors for important-files prompts", async () => {
+    const root = await fixtureRoot();
+    await mkdir(path.join(root, "src", "agents"), { recursive: true });
+    await mkdir(path.join(root, "src", "repository-map"), { recursive: true });
+    await mkdir(path.join(root, "src", "cli"), { recursive: true });
+    await writeBaseAnchors(root);
+    await writeFile(path.join(root, "src", "core", "run-controller.ts"), "export class RunController {}\n", "utf8");
+    await writeFile(path.join(root, "src", "agents", "provider-adapters.ts"), "export class CodexCliAgentAdapter {}\n", "utf8");
+    await writeFile(path.join(root, "src", "repository-map", "repository-map.ts"), "export function generateRepositoryMap() { return true; }\n", "utf8");
+    await writeFile(path.join(root, "src", "ledger", "filesystem-ledger.ts"), "export class FilesystemLedger {}\n", "utf8");
+    await writeFile(path.join(root, "src", "cli", "index.ts"), "export function createProgram() {}\n", "utf8");
+
+    const repoMap = await generateRepositoryMap({
+      root,
+      prompt: "중요한 파일 5개를 설명해",
+      maxChars: 2000,
+      contextAnchors: true,
+      anchorMaxChars: 850
+    });
+
+    expect(repoMap.markdown).toContain("Important Files Evidence:");
+    expect(repoMap.markdown).toContain("Use these files as the supported candidates for important-files answers.");
+    expect(repoMap.markdown).toContain("src/core/run-controller.ts");
+    expect(repoMap.markdown).toContain("src/agents/provider-adapters.ts");
+    expect(repoMap.markdown).toContain("src/repository-map/repository-map.ts");
+    expect(repoMap.markdown).toContain("src/ledger/filesystem-ledger.ts");
+    expect(repoMap.markdown).toContain("src/cli/index.ts");
+    expect(repoMap.budget.renderedChars).toBeLessThanOrEqual(2000);
+    expect(repoMap.summary.filesIncluded).toBeGreaterThanOrEqual(1);
+    expect(repoMap.summary.symbolsIncluded).toBeGreaterThan(0);
+  });
+
+  it("detects important-files prompts without adding evidence to generic or non-anchor runs", async () => {
+    expect(detectAnchorIntent("important files")).toBe("important-files");
+    expect(detectAnchorIntent("main files")).toBe("important-files");
+    expect(detectAnchorIntent("core files")).toBe("important-files");
+    expect(detectAnchorIntent("critical files")).toBe("important-files");
+    expect(detectAnchorIntent("중요한 파일 5개")).toBe("important-files");
+    expect(detectAnchorIntent("핵심 파일")).toBe("important-files");
+    expect(detectAnchorIntent("주요 파일")).toBe("important-files");
+    expect(detectAnchorIntent("핵심 코드")).toBe("important-files");
+
+    const root = await fixtureRoot();
+    await mkdir(path.join(root, "src", "agents"), { recursive: true });
+    await mkdir(path.join(root, "src", "repository-map"), { recursive: true });
+    await mkdir(path.join(root, "src", "cli"), { recursive: true });
+    await writeBaseAnchors(root);
+    await writeFile(path.join(root, "src", "core", "run-controller.ts"), "export class RunController {}\n", "utf8");
+    await writeFile(path.join(root, "src", "agents", "provider-adapters.ts"), "export class CodexCliAgentAdapter {}\n", "utf8");
+    await writeFile(path.join(root, "src", "repository-map", "repository-map.ts"), "export function generateRepositoryMap() { return true; }\n", "utf8");
+    await writeFile(path.join(root, "src", "ledger", "filesystem-ledger.ts"), "export class FilesystemLedger {}\n", "utf8");
+    await writeFile(path.join(root, "src", "cli", "index.ts"), "export function createProgram() {}\n", "utf8");
+
+    const nonAnchorRun = await generateRepositoryMap({
+      root,
+      prompt: "important files",
+      maxChars: 2000,
+      contextAnchors: false
+    });
+    const genericInstantRun = await generateRepositoryMap({
+      root,
+      prompt: "summarize this project",
+      maxChars: 2000,
+      contextAnchors: true,
+      anchorMaxChars: 850
+    });
+
+    expect(nonAnchorRun.markdown).not.toContain("Important Files Evidence:");
+    expect(genericInstantRun.markdown).not.toContain("Important Files Evidence:");
   });
 
   it("selects repository-map anchors for non-bug RepoMap prompts", async () => {

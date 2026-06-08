@@ -471,7 +471,7 @@ function detectInstantOutputIntent(prompt: string): InstantOutputIntent {
   const normalized = normalizePromptForOutputIntent(prompt);
   const has = (keywords: string[]) => keywords.some((keyword) => normalized.includes(normalizePromptForOutputIntent(keyword)));
 
-  if (has(["important files", "main files", "core files", "critical files", "key files", "중요한 파일", "핵심 파일"])) {
+  if (has(["important files", "main files", "core files", "critical files", "key files", "중요한 파일", "핵심 파일", "주요 파일", "핵심 코드"])) {
     return "important-files";
   }
   if (has(["pitch", "소개글", "소개", "first paragraph", "readme first paragraph", "github readme", "obsidian", "discord", "30-second", "30 second"])) {
@@ -506,7 +506,7 @@ function instantIntentInstruction(intent: InstantOutputIntent): string | undefin
     case "bug":
       return "Bug output: 3 likely hypotheses maximum, ranked from most likely to least likely. Include short evidence or missing evidence for each. Do not claim a confirmed root cause unless evidence is present.";
     case "important-files":
-      return "Important files output: use a markdown table with columns File | Purpose | Reason. Maximum 5 rows. Do not invent files.";
+      return "Important files output: use a markdown table with columns File | Purpose | Reason. Maximum 5 rows. Choose files only from Important Files Evidence or Repository Context Map. If fewer than 5 files are supported, return fewer rows. Do not invent files.";
     case "pitch":
       return "Pitch output: one paragraph only, target 120 English words or 500 Korean characters. Use canonical vocabulary: prep, cook, taste, banquet, local-first, provider-neutral, ledger, instant. Do not invent modes or product terminology.";
     case "onboarding":

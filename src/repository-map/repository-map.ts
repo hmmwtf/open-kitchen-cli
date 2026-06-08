@@ -47,6 +47,28 @@ const PROMPT_STOPWORDS = new Set([
   "app"
 ]);
 const TEST_INTENT_TOKENS = new Set(["test", "tests", "testing", "validation", "validate", "coverage", "review", "spec"]);
+const IMPORTANT_FILES_EVIDENCE = [
+  {
+    path: "src/core/run-controller.ts",
+    summary: "orchestrates run lifecycle, mode decision, provider execution, RepoMap, and ledger writes."
+  },
+  {
+    path: "src/agents/provider-adapters.ts",
+    summary: "provider-backed adapter implementations, prompt construction, and provider output handling."
+  },
+  {
+    path: "src/repository-map/repository-map.ts",
+    summary: "repository context map generation and prompt-aware anchors for Prep instant."
+  },
+  {
+    path: "src/ledger/filesystem-ledger.ts",
+    summary: "local run ledger persistence, result artifacts, events, and readable run records."
+  },
+  {
+    path: "src/cli/index.ts",
+    summary: "CLI executable entrypoint, Commander program factory, and top-level command registration."
+  }
+] as const;
 
 export interface GenerateRepositoryMapInput {
   root: string;
@@ -164,6 +186,9 @@ export function detectAnchorIntent(prompt: string): AnchorIntent {
   }
   if (has(["architecture", "구조", "설계", "전체", "overview"])) {
     return "architecture";
+  }
+  if (has(["important files", "main files", "core files", "critical files", "핵심 파일", "중요한 파일", "주요 파일", "핵심 코드"])) {
+    return "important-files";
   }
   if (has(["bug", "fix", "error", "fail", "timeout", "문제", "오류", "분석"])) {
     return "bug";
@@ -661,7 +686,12 @@ function renderFileBlock(file: RepositoryMapFile): string {
 async function collectContextAnchors(input: { root: string; intent: AnchorIntent; bugDomain: AnchorBugDomain; cliBugSubtype: AnchorCliBugSubtype; maxChars: number }): Promise<string> {
   const blocks: string[] = [];
   const maxChars = input.maxChars;
-  if (input.intent === "bug") {
+  if (input.intent === "important-files") {
+    const evidence = renderImportantFilesEvidenceAnchor(input.root);
+    if (evidence) {
+      blocks.push(truncateBlock(evidence, Math.min(850, maxChars)));
+    }
+  } else if (input.intent === "bug") {
     for (const candidate of bugAnchorCandidates(input.bugDomain, input.cliBugSubtype)) {
       if (remainingAnchorBudget(blocks, maxChars) <= 80) {
         break;
@@ -725,10 +755,23 @@ function anchorCandidates(intent: AnchorIntent): string[] {
     provider: ["src/agents/adapter.ts", "src/agents/provider-adapters.ts", "src/cli/commands/adapters.ts"],
     repomap: ["src/repository-map/repository-map.ts", "src/repository-map/types.ts", "tests/repository-map.test.ts", "scripts/run-repomap-eval.ps1"],
     bug: [],
+    "important-files": [],
     pitch: ["README.ko.md", "docs/CLI.md", "docs/ARCHITECTURE.md", "src/cli/index.ts"],
     cli: ["src/cli/index.ts", "src/cli/commands/run.ts", "docs/CLI.md"]
   };
   return candidates[intent];
+}
+
+function renderImportantFilesEvidenceAnchor(root: string): string {
+  const existing = IMPORTANT_FILES_EVIDENCE.filter((item) => existsSync(path.join(root, item.path)));
+  if (existing.length === 0) {
+    return "";
+  }
+  return [
+    "Important Files Evidence:",
+    "Use these files as the supported candidates for important-files answers.",
+    ...existing.map((item) => `- ${item.path}: ${item.summary}`)
+  ].join("\n");
 }
 
 function bugAnchorCandidates(domain: AnchorBugDomain, cliBugSubtype: AnchorCliBugSubtype): string[] {
