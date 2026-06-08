@@ -69,6 +69,38 @@ const IMPORTANT_FILES_EVIDENCE = [
     summary: "CLI executable entrypoint, Commander program factory, and top-level command registration."
   }
 ] as const;
+const TECH_DEBT_EVIDENCE = [
+  {
+    area: "Run orchestration",
+    pair: "src/core/run-controller.ts + tests/run-controller.test.ts",
+    lens: "lifecycle, branching, context, ledger effects."
+  },
+  {
+    area: "Provider execution",
+    pair: "src/agents/provider-adapters.ts + tests/provider-adapters.test.ts",
+    lens: "flags, timeout, streams, prompt contracts."
+  },
+  {
+    area: "Process runner",
+    pair: "src/agents/process-runner.ts + tests/process-runner.test.ts",
+    lens: "stdio, timeout, stdout/stderr decoding, cleanup."
+  },
+  {
+    area: "Repository map",
+    pair: "src/repository-map/repository-map.ts + tests/repository-map.test.ts",
+    lens: "budget, anchors."
+  },
+  {
+    area: "CLI surface",
+    pair: "src/cli/index.ts / src/cli/commands/run.ts + tests/cli-smoke.test.ts",
+    lens: "aliases, option parity, npm link entrypoint."
+  },
+  {
+    area: "Ledger persistence",
+    pair: "src/ledger/filesystem-ledger.ts + tests/run-controller.test.ts",
+    lens: "artifact growth, result persistence, schema drift, backward compatibility."
+  }
+] as const;
 
 export interface GenerateRepositoryMapInput {
   root: string;
@@ -183,6 +215,24 @@ export function detectAnchorIntent(prompt: string): AnchorIntent {
   }
   if (has(["provider", "adapter", "codex", "claude", "ollama"])) {
     return "provider";
+  }
+  if (
+    has([
+      "technical debt",
+      "tech debt",
+      "architecture risk",
+      "maintenance risk",
+      "future complexity",
+      "code health",
+      "risk area",
+      "\uae30\uc220 \ubd80\ucc44",
+      "\ubd80\ucc44",
+      "\ub9ac\uc2a4\ud06c",
+      "\uc720\uc9c0\ubcf4\uc218",
+      "\ubcf5\uc7a1\ub3c4"
+    ])
+  ) {
+    return "tech-debt";
   }
   if (has(["architecture", "구조", "설계", "전체", "overview"])) {
     return "architecture";
@@ -691,6 +741,11 @@ async function collectContextAnchors(input: { root: string; intent: AnchorIntent
     if (evidence) {
       blocks.push(truncateBlock(evidence, Math.min(850, maxChars)));
     }
+  } else if (input.intent === "tech-debt") {
+    const evidence = renderTechDebtEvidenceAnchor(input.root);
+    if (evidence) {
+      blocks.push(truncateBlock(evidence, Math.min(850, maxChars)));
+    }
   } else if (input.intent === "bug") {
     for (const candidate of bugAnchorCandidates(input.bugDomain, input.cliBugSubtype)) {
       if (remainingAnchorBudget(blocks, maxChars) <= 80) {
@@ -756,6 +811,7 @@ function anchorCandidates(intent: AnchorIntent): string[] {
     repomap: ["src/repository-map/repository-map.ts", "src/repository-map/types.ts", "tests/repository-map.test.ts", "scripts/run-repomap-eval.ps1"],
     bug: [],
     "important-files": [],
+    "tech-debt": [],
     pitch: ["README.ko.md", "docs/CLI.md", "docs/ARCHITECTURE.md", "src/cli/index.ts"],
     cli: ["src/cli/index.ts", "src/cli/commands/run.ts", "docs/CLI.md"]
   };
@@ -772,6 +828,26 @@ function renderImportantFilesEvidenceAnchor(root: string): string {
     "Use these files as the supported candidates for important-files answers.",
     ...existing.map((item) => `- ${item.path}: ${item.summary}`)
   ].join("\n");
+}
+
+function renderTechDebtEvidenceAnchor(root: string): string {
+  const existing = TECH_DEBT_EVIDENCE.filter((item) => evidencePairExists(root, item.pair));
+  if (existing.length === 0) {
+    return "";
+  }
+  return [
+    "Technical Debt Evidence:",
+    "Use pairs as evidence; no confirmed debt without support.",
+    ...existing.map((item) => `- ${item.area}: ${item.pair}. Lens: ${item.lens}`)
+  ].join("\n");
+}
+
+function evidencePairExists(root: string, pair: string): boolean {
+  return pair
+    .split(/\s+\+\s+|\s+\/\s+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .some((item) => existsSync(path.join(root, item)));
 }
 
 function bugAnchorCandidates(domain: AnchorBugDomain, cliBugSubtype: AnchorCliBugSubtype): string[] {

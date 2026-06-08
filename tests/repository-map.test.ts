@@ -339,6 +339,91 @@ describe("Repository Context Map", () => {
     expect(genericInstantRun.markdown).not.toContain("Important Files Evidence:");
   });
 
+  it("selects technical debt evidence anchors for tech-debt prompts", async () => {
+    const root = await fixtureRoot();
+    await mkdir(path.join(root, "src", "agents"), { recursive: true });
+    await mkdir(path.join(root, "src", "repository-map"), { recursive: true });
+    await mkdir(path.join(root, "src", "ledger"), { recursive: true });
+    await mkdir(path.join(root, "src", "cli", "commands"), { recursive: true });
+    await mkdir(path.join(root, "tests"), { recursive: true });
+    await writeBaseAnchors(root);
+    await writeFile(path.join(root, "src", "core", "run-controller.ts"), "export class RunController {}\n", "utf8");
+    await writeFile(path.join(root, "tests", "run-controller.test.ts"), "export function runControllerTest() { return true; }\n", "utf8");
+    await writeFile(path.join(root, "src", "agents", "provider-adapters.ts"), "export class CodexCliAgentAdapter {}\n", "utf8");
+    await writeFile(path.join(root, "tests", "provider-adapters.test.ts"), "export function providerAdaptersTest() { return true; }\n", "utf8");
+    await writeFile(path.join(root, "src", "agents", "process-runner.ts"), "export function runProcess() { return true; }\n", "utf8");
+    await writeFile(path.join(root, "tests", "process-runner.test.ts"), "export function processRunnerTest() { return true; }\n", "utf8");
+    await writeFile(path.join(root, "src", "repository-map", "repository-map.ts"), "export function generateRepositoryMap() { return true; }\n", "utf8");
+    await writeFile(path.join(root, "tests", "repository-map.test.ts"), "export function repositoryMapTest() { return true; }\n", "utf8");
+    await writeFile(path.join(root, "src", "cli", "index.ts"), "export function createProgram() {}\n", "utf8");
+    await writeFile(path.join(root, "src", "cli", "commands", "run.ts"), "export function registerRunCommand() {}\n", "utf8");
+    await writeFile(path.join(root, "tests", "cli-smoke.test.ts"), "export function cliSmokeTest() { return true; }\n", "utf8");
+    await writeFile(path.join(root, "src", "ledger", "filesystem-ledger.ts"), "export class FilesystemLedger {}\n", "utf8");
+
+    const repoMap = await generateRepositoryMap({
+      root,
+      prompt: "technical debt and maintenance risk",
+      maxChars: 2000,
+      contextAnchors: true,
+      anchorMaxChars: 850
+    });
+
+    expect(repoMap.markdown).toContain("Technical Debt Evidence:");
+    expect(repoMap.markdown).toContain("Run orchestration");
+    expect(repoMap.markdown).toContain("Provider execution");
+    expect(repoMap.markdown).toContain("Process runner");
+    expect(repoMap.markdown).toContain("Repository map");
+    expect(repoMap.markdown).toContain("CLI surface");
+    expect(repoMap.markdown).toContain("Ledger persistence");
+    expect(repoMap.markdown).toContain("src/core/run-controller.ts + tests/run-controller.test.ts");
+    expect(repoMap.markdown).toContain("src/agents/provider-adapters.ts + tests/provider-adapters.test.ts");
+    expect(repoMap.markdown).toContain("src/agents/process-runner.ts + tests/process-runner.test.ts");
+    expect(repoMap.markdown).toContain("src/repository-map/repository-map.ts + tests/repository-map.test.ts");
+    expect(repoMap.markdown).toContain("src/cli/index.ts / src/cli/commands/run.ts + tests/cli-smoke.test.ts");
+    expect(repoMap.markdown).toContain("src/ledger/filesystem-ledger.ts + tests/run-controller.test.ts");
+    expect(repoMap.budget.renderedChars).toBeLessThanOrEqual(2000);
+    expect(repoMap.summary.filesIncluded).toBeGreaterThanOrEqual(1);
+    expect(repoMap.summary.symbolsIncluded).toBeGreaterThan(0);
+  });
+
+  it("detects tech-debt prompts without adding evidence to generic or non-anchor runs", async () => {
+    expect(detectAnchorIntent("technical debt")).toBe("tech-debt");
+    expect(detectAnchorIntent("tech debt")).toBe("tech-debt");
+    expect(detectAnchorIntent("architecture risk")).toBe("tech-debt");
+    expect(detectAnchorIntent("maintenance risk")).toBe("tech-debt");
+    expect(detectAnchorIntent("future complexity")).toBe("tech-debt");
+    expect(detectAnchorIntent("code health")).toBe("tech-debt");
+    expect(detectAnchorIntent("risk area")).toBe("tech-debt");
+    expect(detectAnchorIntent("\uae30\uc220 \ubd80\ucc44")).toBe("tech-debt");
+    expect(detectAnchorIntent("\ub9ac\uc2a4\ud06c")).toBe("tech-debt");
+    expect(detectAnchorIntent("\uc720\uc9c0\ubcf4\uc218")).toBe("tech-debt");
+    expect(detectAnchorIntent("\ubcf5\uc7a1\ub3c4")).toBe("tech-debt");
+
+    const root = await fixtureRoot();
+    await mkdir(path.join(root, "src", "core"), { recursive: true });
+    await mkdir(path.join(root, "tests"), { recursive: true });
+    await writeBaseAnchors(root);
+    await writeFile(path.join(root, "src", "core", "run-controller.ts"), "export class RunController {}\n", "utf8");
+    await writeFile(path.join(root, "tests", "run-controller.test.ts"), "export function runControllerTest() { return true; }\n", "utf8");
+
+    const nonAnchorRun = await generateRepositoryMap({
+      root,
+      prompt: "technical debt",
+      maxChars: 2000,
+      contextAnchors: false
+    });
+    const genericInstantRun = await generateRepositoryMap({
+      root,
+      prompt: "summarize this project",
+      maxChars: 2000,
+      contextAnchors: true,
+      anchorMaxChars: 850
+    });
+
+    expect(nonAnchorRun.markdown).not.toContain("Technical Debt Evidence:");
+    expect(genericInstantRun.markdown).not.toContain("Technical Debt Evidence:");
+  });
+
   it("selects repository-map anchors for non-bug RepoMap prompts", async () => {
     const root = await fixtureRoot();
     await mkdir(path.join(root, "src", "repository-map"), { recursive: true });

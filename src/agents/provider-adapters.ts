@@ -447,7 +447,7 @@ function providerPrompt(input: AgentAdapterInput): string {
   ].join("\n");
 }
 
-type InstantOutputIntent = "architecture" | "provider" | "repomap" | "bug" | "important-files" | "pitch" | "onboarding" | "generic";
+type InstantOutputIntent = "architecture" | "provider" | "repomap" | "bug" | "important-files" | "tech-debt" | "pitch" | "onboarding" | "generic";
 
 function instantOutputInstruction(prompt: string): string {
   const intentInstruction = instantIntentInstruction(detectInstantOutputIntent(prompt));
@@ -473,6 +473,24 @@ function detectInstantOutputIntent(prompt: string): InstantOutputIntent {
 
   if (has(["important files", "main files", "core files", "critical files", "key files", "중요한 파일", "핵심 파일", "주요 파일", "핵심 코드"])) {
     return "important-files";
+  }
+  if (
+    has([
+      "technical debt",
+      "tech debt",
+      "architecture risk",
+      "maintenance risk",
+      "future complexity",
+      "code health",
+      "risk area",
+      "\uae30\uc220 \ubd80\ucc44",
+      "\ubd80\ucc44",
+      "\ub9ac\uc2a4\ud06c",
+      "\uc720\uc9c0\ubcf4\uc218",
+      "\ubcf5\uc7a1\ub3c4"
+    ])
+  ) {
+    return "tech-debt";
   }
   if (has(["pitch", "소개글", "소개", "first paragraph", "readme first paragraph", "github readme", "obsidian", "discord", "30-second", "30 second"])) {
     return "pitch";
@@ -507,6 +525,8 @@ function instantIntentInstruction(intent: InstantOutputIntent): string | undefin
       return "Bug output: 3 likely hypotheses maximum, ranked from most likely to least likely. Include short evidence or missing evidence for each. Do not claim a confirmed root cause unless evidence is present.";
     case "important-files":
       return "Important files output: use a markdown table with columns File | Purpose | Reason. Maximum 5 rows. Choose files only from Important Files Evidence or Repository Context Map. If fewer than 5 files are supported, return fewer rows. Do not invent files.";
+    case "tech-debt":
+      return 'Tech debt output: use a markdown table with columns Rank | Area | Maintenance Risk | Evidence | Next Check. Return 3-5 ranked risks, from most likely to least likely. Use "may become", "risk", or "needs verification" wording. Do not claim confirmed debt unless evidence supports it. Do not invent missing tests, bugs, files, or failures. If evidence is insufficient, mark the item as needs verification. Use only files from Technical Debt Evidence or Repository Context Map.';
     case "pitch":
       return "Pitch output: one paragraph only, target 120 English words or 500 Korean characters. Use canonical vocabulary: prep, cook, taste, banquet, local-first, provider-neutral, ledger, instant. Do not invent modes or product terminology.";
     case "onboarding":

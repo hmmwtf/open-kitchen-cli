@@ -193,6 +193,15 @@ describe("Provider Adapter v1", () => {
         expected: ["Important files output", "File | Purpose | Reason", "Choose files only from Important Files Evidence or Repository Context Map", "Do not invent files"]
       },
       {
+        prompt: "Find technical debt and maintenance risk in this project.",
+        expected: [
+          "Tech debt output",
+          "Rank | Area | Maintenance Risk | Evidence | Next Check",
+          "Do not claim confirmed debt unless evidence supports it",
+          "Do not invent missing tests, bugs, files, or failures"
+        ]
+      },
+      {
         prompt: "Write a pitch for OpenKitchen.",
         expected: ["Pitch output: one paragraph only", "prep, cook, taste, banquet", "Do not invent modes"]
       },
