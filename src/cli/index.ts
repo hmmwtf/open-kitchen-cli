@@ -5,6 +5,7 @@ import { Command } from "commander";
 import { registerAdaptersCommand } from "./commands/adapters.js";
 import { registerLedgerCommand } from "./commands/ledger.js";
 import { registerLedgerShortcutCommands } from "./commands/ledger-shortcuts.js";
+import { registerLedgerStatsCommand } from "./commands/ledger-stats.js";
 import { registerModesCommand } from "./commands/modes.js";
 import { registerRecommendCommand } from "./commands/recommend.js";
 import { registerRecipeCommand } from "./commands/recipe.js";
@@ -27,6 +28,7 @@ export function createProgram(): Command {
   registerRecipeCommand(program);
   registerLedgerCommand(program);
   registerLedgerShortcutCommands(program);
+  registerLedgerStatsCommand(program);
 
   return program;
 }

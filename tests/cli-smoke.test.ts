@@ -249,6 +249,119 @@ describe("CLI smoke tests", () => {
     expect(process.exitCode).toBe(1);
   });
 
+  it("prints run stats with metrics, grouping, skipped runs, and no output dumps", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "open-kitchen-cli-stats-"));
+    await writeStatsRun(root, {
+      runId: "20260608T000001Z-old",
+      prompt: "OpenKitchen을 Obsidian 사용자에게 설명하는 소개글을 작성해",
+      adapter: "mock",
+      status: "completed",
+      startedAt: "2026-06-08T00:00:01.000Z",
+      completedAt: "2026-06-08T00:00:02.000Z",
+      rawOutput: "old raw output",
+      finalAnswer: "old final answer"
+    });
+    await writeStatsRun(root, {
+      runId: "20260608T000002Z-timeout",
+      prompt: "architecture risk와 maintenance risk를 분석해줘",
+      adapter: "codex-cli",
+      status: "failed",
+      startedAt: "2026-06-08T00:00:02.000Z",
+      completedAt: "2026-06-08T00:00:17.000Z",
+      providerDurationMs: 15000,
+      timedOut: true,
+      rawOutput: "RAW_BODY_SHOULD_NOT_PRINT",
+      finalAnswer: "FINAL_BODY_SHOULD_NOT_PRINT",
+      filesIncluded: 2,
+      symbolsIncluded: 7,
+      repoMapTruncated: true
+    });
+    await writeStatsRun(root, {
+      runId: "20260608T000003Z-instant",
+      prompt: "이 프로젝트에서 가장 중요한 파일 5개를 설명해",
+      adapter: "codex-cli",
+      status: "completed",
+      startedAt: "2026-06-08T00:00:03.000Z",
+      completedAt: "2026-06-08T00:00:13.000Z",
+      providerDurationMs: 9000,
+      commandEvents: 1,
+      rawOutput: "R".repeat(1200),
+      finalAnswer: "A".repeat(600),
+      filesIncluded: 1,
+      symbolsIncluded: 5,
+      repoMapTruncated: true,
+      instantAnchors: true
+    });
+    await writeBrokenRun(root, "99999999T999999Z-broken");
+
+    await createProgram().parseAsync(["node", "open-kitchen", "stats", "--ledger-root", root, "--limit", "2"]);
+
+    const output = logs.join("\n");
+    expect(output).toContain("OpenKitchen Run Stats");
+    expect(output).toContain("Window: latest 2 valid runs");
+    expect(output).toContain("Skipped: 1 incomplete run");
+    expect(output).toContain("Runs: 2");
+    expect(output).toContain("Completed: 1");
+    expect(output).toContain("Timed out: 1");
+    expect(output).toContain("Completion rate: 50.0%");
+    expect(output).toContain("Avg total: 12.50s");
+    expect(output).toContain("Avg provider: 12.00s");
+    expect(output).toContain("Avg commands: 0.5");
+    expect(output).toContain("By Adapter");
+    expect(output).toContain("codex-cli | 2 | 1 | 1");
+    expect(output).toContain("By Prompt Category");
+    expect(output).toContain("important-files | 1 | 1 | 0");
+    expect(output).toContain("tech-debt | 1 | 0 | 1");
+    expect(output).toContain("Inferred instant runs: 1");
+    expect(output).toContain("Zero-command rate: 50.0%");
+    expect(output).toContain("RepoMap truncated: 2");
+    expect(output).not.toContain("RAW_BODY_SHOULD_NOT_PRINT");
+    expect(output).not.toContain("FINAL_BODY_SHOULD_NOT_PRINT");
+    expect(output).not.toContain("old raw output");
+  });
+
+  it("prints no valid runs for empty stats ledgers", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "open-kitchen-cli-stats-empty-"));
+
+    await createProgram().parseAsync(["node", "open-kitchen", "stats", "--ledger-root", root]);
+
+    expect(logs.join("\n")).toContain("No valid runs found.");
+  });
+
+  it("prints parseable stats JSON and handles partial or invalid runs", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "open-kitchen-cli-stats-json-"));
+    await writeStatsRun(root, {
+      runId: "20260608T000001Z-partial",
+      prompt: "Provider Adapter 구조를 설명해",
+      adapter: "codex-cli",
+      status: "completed",
+      startedAt: "2026-06-08T00:00:01.000Z",
+      completedAt: "2026-06-08T00:00:03.000Z",
+      partial: true
+    });
+    await mkdir(path.join(root, "99999999T999999Z-invalid"), { recursive: true });
+    await writeFile(path.join(root, "99999999T999999Z-invalid", "run.json"), "{ invalid json", "utf8");
+
+    await createProgram().parseAsync(["node", "open-kitchen", "stats", "--json", "--ledger-root", root]);
+
+    const parsed = JSON.parse(logs.join("\n")) as {
+      skippedCount: number;
+      partialCount: number;
+      summary: { runs: number; completed: number; completionRate: number };
+      byAdapter: Array<{ key: string; runs: number }>;
+      byPromptCategory: Array<{ key: string; runs: number }>;
+      instantQualityProxies: { inferredInstantRuns: number };
+    };
+    expect(parsed.skippedCount).toBe(1);
+    expect(parsed.partialCount).toBe(1);
+    expect(parsed.summary.runs).toBe(1);
+    expect(parsed.summary.completed).toBe(1);
+    expect(parsed.summary.completionRate).toBe(1);
+    expect(parsed.byAdapter).toContainEqual(expect.objectContaining({ key: "codex-cli", runs: 1 }));
+    expect(parsed.byPromptCategory).toContainEqual(expect.objectContaining({ key: "provider", runs: 1 }));
+    expect(parsed.instantQualityProxies.inferredInstantRuns).toBe(0);
+  });
+
   it.each([
     ["chef", "chef", "summarize this repo"],
     ["prep", "prep", "inspect this repo"],
@@ -679,5 +792,124 @@ describe("CLI smoke tests", () => {
       )}\n`,
       "utf8"
     );
+  }
+
+  async function writeStatsRun(
+    root: string,
+    input: {
+      runId: string;
+      prompt: string;
+      adapter: "mock" | "codex-cli";
+      status: "completed" | "failed";
+      startedAt: string;
+      completedAt?: string;
+      providerDurationMs?: number;
+      timedOut?: boolean;
+      commandEvents?: number;
+      rawOutput?: string;
+      finalAnswer?: string;
+      filesIncluded?: number;
+      symbolsIncluded?: number;
+      repoMapTruncated?: boolean;
+      instantAnchors?: boolean;
+      partial?: boolean;
+    }
+  ): Promise<void> {
+    const runPath = path.join(root, input.runId);
+    await mkdir(path.join(runPath, "artifacts"), { recursive: true });
+    const adapter =
+      input.adapter === "mock"
+        ? { name: "mock", displayName: "Mock Agent Adapter", kind: "mock", provider: "mock", isMock: true }
+        : { name: "codex-cli", displayName: "Codex CLI Adapter", kind: "cli", provider: "openai", isMock: false };
+    await writeFile(
+      path.join(runPath, "run.json"),
+      `${JSON.stringify(
+        {
+          runId: input.runId,
+          mode: "prep",
+          adapter,
+          status: input.status,
+          startedAt: input.startedAt,
+          completedAt: input.completedAt
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+    await writeFile(path.join(runPath, "prompt.txt"), input.prompt, "utf8");
+    if (input.partial) {
+      return;
+    }
+    await writeFile(
+      path.join(runPath, "result.json"),
+      `${JSON.stringify(
+        {
+          runId: input.runId,
+          mode: "prep",
+          adapter,
+          status: input.status,
+          summary: "Stats fixture",
+          outputs: [
+            {
+              output: input.finalAnswer ?? "",
+              rawOutput: input.rawOutput ?? ""
+            }
+          ]
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+    await writeFile(
+      path.join(runPath, "repo-map.json"),
+      `${JSON.stringify(
+        {
+          status: "generated",
+          summary: {
+            filesIncluded: input.filesIncluded ?? 0,
+            symbolsIncluded: input.symbolsIncluded ?? 0
+          },
+          budget: {
+            renderedChars: 1000,
+            truncated: input.repoMapTruncated ?? false
+          }
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+    await writeFile(
+      path.join(runPath, "artifacts", "repo-map.md"),
+      input.instantAnchors ? "## Context Anchors\n\nImportant Files Evidence:\n" : "# Repository Context Map\n",
+      "utf8"
+    );
+    await writeFile(path.join(runPath, "artifacts", "provider-raw-output-direct.txt"), input.rawOutput ?? "", "utf8");
+    await writeFile(path.join(runPath, "artifacts", "agent-output-direct.md"), input.finalAnswer ?? "", "utf8");
+    const events = [
+      {
+        timestamp: input.startedAt,
+        type: "run.started",
+        message: "Started fixture run."
+      },
+      ...(input.providerDurationMs !== undefined
+        ? [
+            {
+              timestamp: input.completedAt ?? input.startedAt,
+              type: input.timedOut ? "provider.invocation.timed_out" : "provider.invocation.completed",
+              message: input.timedOut ? "Provider timed out." : "Provider completed.",
+              data: { durationMs: input.providerDurationMs }
+            }
+          ]
+        : []),
+      ...Array.from({ length: input.commandEvents ?? 0 }, (_, index) => ({
+        timestamp: input.completedAt ?? input.startedAt,
+        type: "provider.command.completed",
+        message: `Command ${index + 1} completed.`
+      }))
+    ];
+    await writeFile(path.join(runPath, "events.jsonl"), `${events.map((event) => JSON.stringify(event)).join("\n")}\n`, "utf8");
   }
 });
