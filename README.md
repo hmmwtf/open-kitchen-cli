@@ -80,6 +80,53 @@ Inspect the latest run:
 ok last
 ```
 
+## Ask An AI Agent To Install It
+
+If you use Codex, Claude Code, Cursor, OpenCode, or another coding agent, you
+can ask the agent to install and verify OpenKitchen for you.
+
+Copy this prompt into your agent:
+
+```text
+Install OpenKitchen from this repository:
+
+https://github.com/hmmwtf/open-kitchen-cli
+
+Please do the following safely:
+
+1. Clone the repository.
+2. Run npm install.
+3. Run npm run build.
+4. Link the CLI locally with npm link.
+5. Verify:
+   - ok --help
+   - ok modes
+   - ok prep --adapter mock "inspect this repo"
+6. Do not run live provider-backed commands unless I explicitly ask.
+7. Do not commit or push anything.
+8. Report the installed path, verification results, and any errors.
+```
+
+For Windows PowerShell, the agent may use:
+
+```powershell
+npm.cmd install
+npm.cmd run build
+npm.cmd link
+ok --help
+ok modes
+ok prep --adapter mock "inspect this repo"
+```
+
+After that, try:
+
+```powershell
+ok prep --instant --adapter mock "inspect this repo"
+ok last
+ok show <run-id>
+ok logs <run-id> --provider
+```
+
 ## Daily Use
 
 The recommended daily path is `prep --instant` when you want a quick,

@@ -80,6 +80,53 @@ ok prep --adapter mock "이 레포를 분석해"
 ok last
 ```
 
+## AI Agent에게 설치시키기
+
+Codex, Claude Code, Cursor, OpenCode 같은 coding agent를 쓰고 있다면
+OpenKitchen 설치와 검증을 agent에게 맡길 수 있습니다.
+
+아래 프롬프트를 그대로 붙여넣으세요:
+
+```text
+Install OpenKitchen from this repository:
+
+https://github.com/hmmwtf/open-kitchen-cli
+
+Please do the following safely:
+
+1. Clone the repository.
+2. Run npm install.
+3. Run npm run build.
+4. Link the CLI locally with npm link.
+5. Verify:
+   - ok --help
+   - ok modes
+   - ok prep --adapter mock "inspect this repo"
+6. Do not run live provider-backed commands unless I explicitly ask.
+7. Do not commit or push anything.
+8. Report the installed path, verification results, and any errors.
+```
+
+Windows PowerShell에서는 agent가 아래 명령을 사용할 수 있습니다:
+
+```powershell
+npm.cmd install
+npm.cmd run build
+npm.cmd link
+ok --help
+ok modes
+ok prep --adapter mock "inspect this repo"
+```
+
+설치 후에는 이렇게 확인해볼 수 있습니다:
+
+```powershell
+ok prep --instant --adapter mock "이 레포를 분석해"
+ok last
+ok show <run-id>
+ok logs <run-id> --provider
+```
+
 ## Daily Use
 
 짧은 daily 질문에는 `prep --instant`를 기본 흐름으로 권장합니다.
