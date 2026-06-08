@@ -1,0 +1,55 @@
+{
+  "name": "open-kitchen",
+  "version": "0.1.0",
+  "description": "Local-first CLI for mode-based AI coding workflows with inspectable run ledgers.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hmmwtf/open-kitchen.git"
+  },
+  "homepage": "https://github.com/hmmwtf/open-kitchen#readme",
+  "bugs": {
+    "url": "https://github.com/hmmwtf/open-kitchen/issues"
+  },
+  "keywords": [
+    "ai",
+    "coding-agent",
+    "cli",
+    "local-first",
+    "ledger",
+    "workflow",
+    "codex",
+    "orchestration"
+  ],
+  "files": [
+    "dist",
+    "README.md",
+    "README.ko.md",
+    "LICENSE",
+    "docs",
+    "PRODUCT.md"
+  ],
+  "bin": {
+    "open-kitchen": "./dist/cli/index.js",
+    "ok": "./dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/cli/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.29",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3",
+    "vitest": "^2.1.9"
+  }
+}

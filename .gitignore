@@ -1,0 +1,7 @@
+node_modules/
+dist/
+coverage/
+.open-kitchen/
+*.log
+.tmp/
+output/
