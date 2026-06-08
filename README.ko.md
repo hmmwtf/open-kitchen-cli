@@ -53,6 +53,8 @@ OpenKitchen은 실행 능력 자체보다 운영 가시성에 집중합니다.
 
 ## Quick Start
 
+## 직접 설치하기
+
 설치하고 빌드합니다:
 
 ```bash
@@ -80,10 +82,22 @@ ok prep --adapter mock "이 레포를 분석해"
 ok last
 ```
 
-## AI Agent에게 설치시키기
+직접 설치가 기본 경로입니다. 설치 과정을 명확하게 볼 수 있고 문제가 생겼을 때
+디버깅하기 쉽습니다.
 
-Codex, Claude Code, Cursor, OpenCode 같은 coding agent를 쓰고 있다면
-OpenKitchen 설치와 검증을 agent에게 맡길 수 있습니다.
+## AI Coding Agent로 설치하기
+
+shell command 실행, repository clone, npm command 실행이 가능한 coding agent라면
+어떤 agent에도 OpenKitchen 설치와 검증을 맡길 수 있습니다.
+
+Codex CLI, Claude Code, OpenCode, Cursor, Gemini CLI, Aider, Qwen Code,
+Kimi K2, local Ollama workflow, 그리고 앞으로 나올 coding agent에서도 같은 방식으로
+사용할 수 있습니다.
+
+OpenKitchen은 provider-neutral 도구입니다. 예시는 개발 과정에서 자주 사용한
+Codex CLI를 포함하지만, OpenKitchen은 여러 coding agent와 local model을 함께
+쓰기 위해 설계되었습니다. 현재 provider adapter는 Codex CLI, Claude Code,
+Ollama를 지원합니다.
 
 아래 프롬프트를 그대로 붙여넣으세요:
 

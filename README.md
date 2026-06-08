@@ -53,6 +53,8 @@ OpenKitchen focuses on operational clarity:
 
 ## Quick Start
 
+## Install Manually
+
 Install and build:
 
 ```bash
@@ -80,10 +82,21 @@ Inspect the latest run:
 ok last
 ```
 
-## Ask An AI Agent To Install It
+Manual installation is the primary path. It keeps the setup explicit and easy to
+debug.
 
-If you use Codex, Claude Code, Cursor, OpenCode, or another coding agent, you
-can ask the agent to install and verify OpenKitchen for you.
+## Install With An AI Coding Agent
+
+You can also ask any coding agent to install and verify OpenKitchen for you, as
+long as it can execute shell commands, clone repositories, and run npm commands.
+
+This can work with Codex CLI, Claude Code, OpenCode, Cursor, Gemini CLI, Aider,
+Qwen Code, Kimi K2, local Ollama workflows, and future coding agents.
+
+OpenKitchen is provider-neutral. Examples often use Codex CLI because it was
+commonly available during development, but OpenKitchen is designed to work with
+multiple coding agents and local models. Current provider adapters include
+Codex CLI, Claude Code, and Ollama.
 
 Copy this prompt into your agent:
 
