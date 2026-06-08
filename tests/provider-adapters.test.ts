@@ -160,10 +160,99 @@ describe("Provider Adapter v1", () => {
     });
 
     expect(instantCalls[0]?.args.at(-1)).toContain("Instant mode: answer using only the provided OpenKitchen context");
+    expect(instantCalls[0]?.args.at(-1)).toContain("Instant output contract:");
+    expect(instantCalls[0]?.args.at(-1)).toContain("Do not explain your reasoning or process.");
     expect(instantCalls[0]?.args.at(-1)).not.toContain("Fast mode:");
     expect(fastInstantCalls[0]?.args.at(-1)).toContain("Instant mode:");
+    expect(fastInstantCalls[0]?.args.at(-1)).toContain("Instant output contract:");
     expect(fastInstantCalls[0]?.args.at(-1)).not.toContain("Fast mode:");
     expect(normalCalls[0]?.args.at(-1)).not.toContain("Instant mode:");
+    expect(normalCalls[0]?.args.at(-1)).not.toContain("Instant output contract:");
+  });
+
+  it("adds instant intent-specific output instructions without changing generic prompts", async () => {
+    const prompts = [
+      {
+        prompt: "Explain the overall architecture.",
+        expected: ["Architecture output: 5-7 bullets maximum", "components and responsibilities"]
+      },
+      {
+        prompt: "Explain the Provider Adapter structure.",
+        expected: ["Provider output: 3 bullets plus one key files line", "Do not speculate about provider internals"]
+      },
+      {
+        prompt: "Explain what Repository Context Map does.",
+        expected: ["RepoMap output: 5 bullets maximum", "orientation/context map", "not a complete repository analysis"]
+      },
+      {
+        prompt: "Analyze the CLI entrypoint bug.",
+        expected: ["Bug output: 3 likely hypotheses maximum", "Do not claim a confirmed root cause unless evidence is present"]
+      },
+      {
+        prompt: "What are the important files in this project?",
+        expected: ["Important files output", "File | Purpose | Reason", "Maximum 5 rows"]
+      },
+      {
+        prompt: "Write a pitch for OpenKitchen.",
+        expected: ["Pitch output: one paragraph only", "prep, cook, taste, banquet", "Do not invent modes"]
+      },
+      {
+        prompt: "Explain this project to a new developer in 10 lines.",
+        expected: ["Onboarding output: numbered list", "10 numbered lines maximum"]
+      }
+    ];
+
+    for (const item of prompts) {
+      const calls: Parameters<ProcessRunner>[0][] = [];
+      const runner: ProcessRunner = async (request) => {
+        calls.push(request);
+        return {
+          stdout: `${JSON.stringify({ text: "codex output" })}\n`,
+          stderr: "",
+          exitCode: 0,
+          timedOut: false,
+          durationMs: 7
+        };
+      };
+
+      await new CodexCliAgentAdapter(runner, { OPEN_KITCHEN_CODEX_BIN: "codex-test" }).execute({
+        runId: `run-${item.prompt}`,
+        task: task(item.prompt),
+        agentRole: "worker",
+        permissionIntent: "read_only",
+        instant: true
+      });
+
+      const prompt = calls[0]?.args.at(-1);
+      expect(prompt).toContain("Instant output contract:");
+      expect(prompt).toContain("Intent-specific output format:");
+      for (const expected of item.expected) {
+        expect(prompt).toContain(expected);
+      }
+    }
+
+    const genericCalls: Parameters<ProcessRunner>[0][] = [];
+    const genericRunner: ProcessRunner = async (request) => {
+      genericCalls.push(request);
+      return {
+        stdout: `${JSON.stringify({ text: "codex output" })}\n`,
+        stderr: "",
+        exitCode: 0,
+        timedOut: false,
+        durationMs: 7
+      };
+    };
+
+    await new CodexCliAgentAdapter(genericRunner, { OPEN_KITCHEN_CODEX_BIN: "codex-test" }).execute({
+      runId: "run-generic",
+      task: task("Summarize this project briefly."),
+      agentRole: "worker",
+      permissionIntent: "read_only",
+      instant: true
+    });
+
+    expect(genericCalls[0]?.args.at(-1)).toContain("Instant output contract:");
+    expect(genericCalls[0]?.args.at(-1)).not.toContain("Intent-specific output format:");
   });
 
   it("uses the instant Codex model only for instant runs", async () => {
@@ -668,11 +757,11 @@ describe("Provider Adapter v1", () => {
   });
 });
 
-function task() {
+function task(prompt = "Do provider work") {
   return {
     id: "task-1",
     title: "Test task",
-    prompt: "Do provider work",
+    prompt,
     agentRole: "worker" as const
   };
 }

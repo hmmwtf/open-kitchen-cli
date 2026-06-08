@@ -425,9 +425,7 @@ function providerPrompt(input: AgentAdapterInput): string {
   const fastInstruction = input.fast
     ? "Fast mode: prioritize a concise answer using the provided OpenKitchen context. Avoid broad repository exploration. Run at most one targeted read command only if necessary. Prefer a short final answer."
     : undefined;
-  const instantInstruction = input.instant
-    ? "Instant mode: answer using only the provided OpenKitchen context. Do not run shell commands. Do not inspect additional files. Do not browse the repository. Prefer a concise final answer in 5 bullets or less. If the provided context is insufficient, say what is missing instead of exploring."
-    : undefined;
+  const instantInstruction = input.instant ? instantOutputInstruction(input.task.prompt) : undefined;
   return [
     `OpenKitchen mode: ${input.mode?.name ?? "unknown"}`,
     `Agent role: ${input.agentRole}`,
@@ -447,6 +445,79 @@ function providerPrompt(input: AgentAdapterInput): string {
     "",
     input.task.prompt
   ].join("\n");
+}
+
+type InstantOutputIntent = "architecture" | "provider" | "repomap" | "bug" | "important-files" | "pitch" | "onboarding" | "generic";
+
+function instantOutputInstruction(prompt: string): string {
+  const intentInstruction = instantIntentInstruction(detectInstantOutputIntent(prompt));
+  return [
+    "Instant mode: answer using only the provided OpenKitchen context. Do not run shell commands. Do not inspect additional files. Do not browse the repository.",
+    "",
+    "Instant output contract:",
+    "- Answer directly.",
+    "- Use 3-5 bullets unless a stricter format is specified below.",
+    "- Do not explain your reasoning or process.",
+    "- Do not restate the question.",
+    "- Do not add extra sections.",
+    "- Keep the final answer concise, preferably under 1000 Korean characters or 450 English words.",
+    "- If the provided context is insufficient, say so in one short bullet and name the missing evidence.",
+    "- Do not invent file names, modes, commands, provider names, or product terminology.",
+    ...(intentInstruction ? ["", "Intent-specific output format:", intentInstruction] : [])
+  ].join("\n");
+}
+
+function detectInstantOutputIntent(prompt: string): InstantOutputIntent {
+  const normalized = normalizePromptForOutputIntent(prompt);
+  const has = (keywords: string[]) => keywords.some((keyword) => normalized.includes(normalizePromptForOutputIntent(keyword)));
+
+  if (has(["important files", "main files", "core files", "critical files", "key files", "중요한 파일", "핵심 파일"])) {
+    return "important-files";
+  }
+  if (has(["pitch", "소개글", "소개", "first paragraph", "readme first paragraph", "github readme", "obsidian", "discord", "30-second", "30 second"])) {
+    return "pitch";
+  }
+  if (has(["new developer", "new teammate", "onboarding", "새로 합류", "신규 개발자", "10줄"])) {
+    return "onboarding";
+  }
+  if (has(["bug", "fix", "error", "fail", "timeout", "problem", "root cause", "technical debt", "risk", "maintenance", "문제", "오류", "원인", "부채", "리스크"])) {
+    return "bug";
+  }
+  if (has(["repomap", "repo map", "repository context", "context map", "repository context map"])) {
+    return "repomap";
+  }
+  if (has(["provider", "adapter", "codex", "claude", "ollama"])) {
+    return "provider";
+  }
+  if (has(["architecture", "structure", "overview", "아키텍처", "구조", "설계", "전체"])) {
+    return "architecture";
+  }
+  return "generic";
+}
+
+function instantIntentInstruction(intent: InstantOutputIntent): string | undefined {
+  switch (intent) {
+    case "architecture":
+      return "Architecture output: 5-7 bullets maximum. Focus on components and responsibilities.";
+    case "provider":
+      return "Provider output: 3 bullets plus one key files line. Focus on adapter contract, implementations, and selection flow. Do not speculate about provider internals.";
+    case "repomap":
+      return "RepoMap output: 5 bullets maximum. Describe it as an orientation/context map, not a complete repository analysis.";
+    case "bug":
+      return "Bug output: 3 likely hypotheses maximum, ranked from most likely to least likely. Include short evidence or missing evidence for each. Do not claim a confirmed root cause unless evidence is present.";
+    case "important-files":
+      return "Important files output: use a markdown table with columns File | Purpose | Reason. Maximum 5 rows. Do not invent files.";
+    case "pitch":
+      return "Pitch output: one paragraph only, target 120 English words or 500 Korean characters. Use canonical vocabulary: prep, cook, taste, banquet, local-first, provider-neutral, ledger, instant. Do not invent modes or product terminology.";
+    case "onboarding":
+      return "Onboarding output: numbered list, 10 numbered lines maximum. Focus on structure, commands, and key files.";
+    case "generic":
+      return undefined;
+  }
+}
+
+function normalizePromptForOutputIntent(prompt: string): string {
+  return prompt.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
 function completedProviderResult(input: {
