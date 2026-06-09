@@ -10,6 +10,7 @@ ok prep --instant --adapter codex-cli "Summarize this repository"
 ok last
 ok show <run-id>
 ok logs <run-id> --provider
+ok stats --limit 50
 ```
 
 OpenKitchen is in early dogfooding. The default adapter is `mock`, and
@@ -54,8 +55,9 @@ exhaustive evidence.
 
 Prep instant selects compact anchors based on the prompt. README/CLI,
 architecture, provider, RepoMap, pitch, and bug-analysis questions receive
-different context. Bug-analysis prompts can use implementation/test anchor pairs
-when the domain is detected.
+different context. The current system includes purpose-built evidence cards for
+important-files, technical-debt, and run-command questions, plus
+implementation/test anchor pairs for domain-specific bug analysis.
 
 **Ledger-first accountability**
 
@@ -65,9 +67,13 @@ and artifacts are written to local files so runs can be audited later.
 
 **Reader surface after execution**
 
-`ok last`, `ok show <run-id>`, and `ok logs <run-id>` make dogfooding and QA
-faster. Users should not need to manually open `result.json`, `result.md`, and
-`events.jsonl` for every run.
+`ok last`, `ok show <run-id>`, `ok logs <run-id>`, and `ok stats` make
+dogfooding and QA faster. Users should not need to manually open `result.json`,
+`result.md`, and `events.jsonl` for every run.
+
+`ok stats` turns recent ledger runs into product-level signals: completion
+rate, timeout rate, provider duration, command count, adapter grouping,
+prompt-category grouping, and instant quality proxies.
 
 **Provider-neutral execution**
 
@@ -124,11 +130,13 @@ Implemented today:
 
 - `ok` alias and mode shortcuts
 - default, `--fast`, and `--instant` Prep paths
-- prompt-aware anchors and bug anchor pairs for Prep instant
+- prompt-aware anchors for Prep instant
+- Important Files, Technical Debt, and Run Command Evidence cards
+- bug implementation/test anchor pairs for Prep instant
 - provider adapters for `mock`, Codex CLI, Claude Code, and Ollama
 - provider diagnostics and explicit smoke checks
 - local filesystem run ledgers
-- ledger inspection shortcuts
+- ledger inspection and stats shortcuts
 - validation evidence and local validation commands
 - approval resume
 - built-in recipes and sequential recipe workflows

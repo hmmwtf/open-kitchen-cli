@@ -10,6 +10,7 @@ ok prep --instant --adapter codex-cli "README와 CLI 구조만 5줄로 요약해
 ok last
 ok show <run-id>
 ok logs <run-id> --provider
+ok stats --limit 50
 ```
 
 ## OpenKitchen이란?
@@ -197,8 +198,14 @@ prompt에 맞춰 작은 anchor를 선택합니다.
 - architecture 질문은 architecture 문서와 core file을 anchor로 넣습니다.
 - provider 질문은 adapter file을 anchor로 넣습니다.
 - Repository Context Map 질문은 repository-map file을 anchor로 넣습니다.
-- bug 분석 질문은 구현 파일과 관련 test file을 짝으로 묶는 bug anchor pair를
+- 중요한 파일 질문은 canonical core file을 담은 **Important Files Evidence**를
   사용합니다.
+- 기술 부채 질문은 compact한 구현/test risk pair를 담은
+  **Technical Debt Evidence**를 사용합니다.
+- run command와 shortcut flow 질문은 **Run Command Evidence**를 사용하고,
+  근거 파일이 포함된 정확히 5단계 실행 흐름 답변을 유도합니다.
+- bug 분석 질문은 domain이 감지되면 구현 파일과 관련 test file을 짝으로
+  묶는 anchor pair를 사용합니다.
 
 더 깊은 근거 확인이 필요하면 기본 경로를 사용합니다.
 
@@ -234,6 +241,9 @@ ok show <run-id> --no-answer
 ok show <run-id> --full
 ok logs <run-id>
 ok logs <run-id> --provider
+ok stats
+ok stats --limit 50
+ok stats --json
 ```
 
 `ok show`는 compact summary를 출력합니다.
@@ -253,6 +263,11 @@ ok logs <run-id> --provider
 `ok logs`는 event timeline을 읽기 쉽게 보여주고, noisy한 provider stream
 chunk는 기본적으로 압축해서 표시합니다.
 
+`ok stats`는 최근 local run을 요약합니다. completion/timeout rate, 평균
+duration, command count, raw/final answer size, adapter별 grouping,
+prompt category별 grouping, zero-command rate와 RepoMap truncation 같은
+instant quality proxy를 보여줍니다.
+
 낮은 수준의 ledger command도 그대로 사용할 수 있습니다.
 
 ```bash
@@ -262,18 +277,27 @@ ok ledger show <run-id>
 
 ## QA Workflow
 
-default, fast, instant를 비교하는 기본 QA loop입니다.
+일상 dogfooding에서는 여러 Prep instant prompt를 샘플로 돌린 뒤 ledger
+summary를 읽습니다.
 
 ```powershell
 $env:OPEN_KITCHEN_PROVIDER_TIMEOUT_MS="15000"
 
+ok prep --instant --adapter codex-cli "Provider Adapter 구조를 설명해"
+ok prep --instant --adapter codex-cli "ok prep 실행 흐름을 5단계로 설명해"
+ok prep --instant --adapter codex-cli "이 프로젝트에서 기술 부채가 생길 수 있는 부분을 찾아줘"
+
+ok show <run-id>
+ok logs <run-id> --provider
+ok stats --limit 50
+```
+
+latency나 품질을 튜닝할 때는 default, fast, instant를 비교합니다.
+
+```powershell
 ok prep --adapter codex-cli "README와 CLI 구조만 5줄로 요약해"
 ok prep --fast --adapter codex-cli "README와 CLI 구조만 5줄로 요약해"
 ok prep --instant --adapter codex-cli "README와 CLI 구조만 5줄로 요약해"
-
-ok last
-ok show <run-id>
-ok logs <run-id> --provider
 ```
 
 비교할 항목:
@@ -287,6 +311,7 @@ ok logs <run-id> --provider
 - RepoMap budget과 included symbols
 - instant가 context-only를 지켰는지
 - 얕은 daily use에 답변 품질이 충분한지
+- `ok stats`에서 보이는 최근 trend metric
 
 ## 지금 구현된 것
 
@@ -300,10 +325,11 @@ ok logs <run-id> --provider
 - provider diagnostics와 explicit smoke check
 - Prep Repository Context Map
 - prompt-aware anchors가 포함된 Prep `--instant`
+- Important Files, Technical Debt, Run Command, bug-analysis evidence card
 - 구현 파일과 test context를 묶는 bug anchor pairs
 - provider-backed Prep `--fast`, `--instant`
 - filesystem run ledger
-- ledger inspection shortcut: `ok last`, `ok show`, `ok logs`
+- ledger inspection shortcut: `ok last`, `ok show`, `ok logs`, `ok stats`
 - validation evidence와 local validation command runner
 - approval resume
 - built-in recipes와 sequential recipe workflow

@@ -88,8 +88,16 @@ ok prep --fast --adapter codex-cli "Quickly inspect this repository structure"
 `--instant` targets low latency but does not guarantee sub-10s responses. It may
 say context is insufficient instead of reading more files. Prompt-aware anchors
 provide compact context for README/CLI, architecture, provider, RepoMap, pitch,
-and bug-analysis prompts. Bug prompts use implementation/test anchor pairs when
-the domain is detected.
+important-files, technical-debt, run-command, and bug-analysis prompts.
+
+Current Prep instant evidence cards include:
+
+- **Important Files Evidence** for canonical core-file questions.
+- **Technical Debt Evidence** for implementation/test risk areas.
+- **Run Command Evidence** for `run command`, `execution flow`, and mode
+  shortcut flow questions. The output contract asks for exactly five
+  evidence-backed steps.
+- bug implementation/test pairs for domain-specific bug-analysis prompts.
 
 ## Core Commands
 
@@ -196,6 +204,44 @@ ok logs <run-id> --raw
 Provider stream chunks are compressed in normal output. Use `--raw` only when
 you need original JSONL event lines.
 
+### `stats`
+
+Show recent local run statistics for QA and dogfooding.
+
+```bash
+ok stats
+ok stats --limit 50
+ok stats --json
+ok stats --ledger-root "output\manual-runs"
+```
+
+`ok stats` reads recent valid runs, skips incomplete runs, and avoids dumping
+raw provider output or final answer bodies. The default text output includes:
+
+- summary metrics: run count, completion rate, timeout rate, average total and
+  provider duration, average command count, output sizes, and runs over 14s
+- grouping by adapter
+- grouping by inferred prompt category
+- instant quality proxies: inferred instant runs, zero-command rate, RepoMap
+  truncation count, and average files/symbols
+
+Use `--json` when another script or report needs parseable output.
+
+### Direct Artifact Reads On Windows PowerShell 5.1
+
+Prefer `ok show`, `ok logs`, and `ok stats` over manual artifact reads. When you
+do inspect ledger artifacts directly on Windows PowerShell 5.1, pass explicit
+UTF-8 encoding:
+
+```powershell
+Get-Content -Encoding UTF8 .open-kitchen\runs\<run-id>\result.json | ConvertFrom-Json
+Get-Content -Encoding UTF8 .open-kitchen\runs\<run-id>\events.jsonl | ForEach-Object { $_ | ConvertFrom-Json }
+```
+
+Ledger JSON is written as valid UTF-8 without BOM. Node `JSON.parse` should be
+treated as the source of truth for JSON validity. Windows PowerShell 5.1 may
+misread BOM-less UTF-8 if `-Encoding UTF8` is omitted.
+
 The lower-level ledger commands are still available:
 
 ```bash
@@ -274,22 +320,31 @@ npm run dev -- recipe workflow resume <workflow-run-id> --workflow-ledger-root "
 
 ## QA Workflow
 
-Compare default, fast, and instant Prep:
+Daily dogfooding usually samples multiple Prep instant prompts and then inspects
+the ledgers:
 
 ```powershell
 $env:OPEN_KITCHEN_PROVIDER_TIMEOUT_MS="15000"
 
+ok prep --instant --adapter codex-cli "Explain the Provider Adapter structure"
+ok prep --instant --adapter codex-cli "Explain the ok prep execution flow in 5 steps"
+ok prep --instant --adapter codex-cli "Find likely technical debt in this project"
+
+ok show <run-id>
+ok logs <run-id> --provider
+ok stats --limit 50
+```
+
+For latency or quality tuning, compare default, fast, and instant Prep:
+
+```powershell
 ok prep --adapter codex-cli "README and CLI structure in 5 bullets"
 ok prep --fast --adapter codex-cli "README and CLI structure in 5 bullets"
 ok prep --instant --adapter codex-cli "README and CLI structure in 5 bullets"
-
-ok last
-ok show <run-id>
-ok logs <run-id> --provider
 ```
 
 Compare latency, command count, output size, RepoMap budget, included symbols,
-and whether instant stayed context-only.
+whether instant stayed context-only, and the recent trend from `ok stats`.
 
 ## Evaluation Helpers
 

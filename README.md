@@ -10,6 +10,7 @@ ok prep --instant --adapter codex-cli "Summarize the README and CLI structure in
 ok last
 ok show <run-id>
 ok logs <run-id> --provider
+ok stats --limit 50
 ```
 
 ## What OpenKitchen Is
@@ -196,8 +197,14 @@ anchors based on the prompt:
 - architecture questions anchor architecture and core files.
 - provider questions anchor adapter files.
 - Repository Context Map questions anchor repository-map files.
-- bug-analysis questions use bug anchor pairs: implementation files plus related
-  tests.
+- important-file questions use **Important Files Evidence** with canonical core
+  files.
+- technical-debt questions use **Technical Debt Evidence** with compact
+  implementation/test risk pairs.
+- run-command and shortcut-flow questions use **Run Command Evidence** and ask
+  for exactly five evidence-backed execution steps.
+- bug-analysis questions use implementation/test anchor pairs when a domain is
+  detected.
 
 Use the default path when deeper evidence matters:
 
@@ -233,6 +240,9 @@ ok show <run-id> --no-answer
 ok show <run-id> --full
 ok logs <run-id>
 ok logs <run-id> --provider
+ok stats
+ok stats --limit 50
+ok stats --json
 ```
 
 `ok show` prints a compact summary:
@@ -252,6 +262,11 @@ ok logs <run-id> --provider
 `ok logs` prints a readable event timeline and compresses noisy provider stream
 chunks by default.
 
+`ok stats` summarizes recent local runs. It reports completion and timeout
+rates, average duration, command counts, raw/final answer sizes, adapter
+grouping, prompt-category grouping, and instant quality proxies such as
+zero-command rate and RepoMap truncation.
+
 The lower-level ledger commands are still available:
 
 ```bash
@@ -261,18 +276,27 @@ ok ledger show <run-id>
 
 ## QA Workflow
 
-A typical default vs fast vs instant QA loop:
+A typical daily dogfooding loop samples several Prep instant prompts, then reads
+the generated ledger summaries:
 
 ```powershell
 $env:OPEN_KITCHEN_PROVIDER_TIMEOUT_MS="15000"
 
+ok prep --instant --adapter codex-cli "Explain the Provider Adapter structure"
+ok prep --instant --adapter codex-cli "Explain the ok prep execution flow in 5 steps"
+ok prep --instant --adapter codex-cli "Find likely technical debt in this project"
+
+ok show <run-id>
+ok logs <run-id> --provider
+ok stats --limit 50
+```
+
+Use default/fast/instant comparison when you are tuning latency or quality:
+
+```powershell
 ok prep --adapter codex-cli "README and CLI structure in 5 bullets"
 ok prep --fast --adapter codex-cli "README and CLI structure in 5 bullets"
 ok prep --instant --adapter codex-cli "README and CLI structure in 5 bullets"
-
-ok last
-ok show <run-id>
-ok logs <run-id> --provider
 ```
 
 Compare:
@@ -286,6 +310,7 @@ Compare:
 - RepoMap budget and included symbols
 - whether instant stayed context-only
 - whether the answer is acceptable for shallow daily use
+- recent trend metrics from `ok stats`
 
 ## What Works Today
 
@@ -299,10 +324,11 @@ Implemented today:
 - provider diagnostics and explicit smoke checks
 - Prep Repository Context Map
 - Prep `--instant` with prompt-aware anchors
+- Important Files, Technical Debt, Run Command, and bug-analysis evidence cards
 - bug anchor pairs for implementation and test context
 - `--fast` and `--instant` provider-backed Prep paths
 - filesystem run ledgers
-- ledger inspection shortcuts: `ok last`, `ok show`, and `ok logs`
+- ledger inspection shortcuts: `ok last`, `ok show`, `ok logs`, and `ok stats`
 - validation evidence and local validation command runner
 - approval resume
 - built-in recipes and sequential recipe workflows
