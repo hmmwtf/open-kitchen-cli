@@ -563,6 +563,8 @@ describe("Provider Adapter v1", () => {
       taskkillAttempted: true,
       taskkillExitCode: 1,
       taskkillStderrPreview: "ERROR: Access is denied.",
+      taskkillStderrEncoding: "utf8",
+      taskkillStderrHadReplacement: false,
       fallbackKillAttempted: true,
       fallbackKillSucceeded: true,
       stdoutLengthAtTimeout: 64,
@@ -598,6 +600,8 @@ describe("Provider Adapter v1", () => {
     expect(result.provider?.timedOutPid).toBe(1234);
     expect(result.provider?.taskkillExitCode).toBe(1);
     expect(result.provider?.taskkillStderrPreview).toContain("Access is denied");
+    expect(result.provider?.taskkillStderrEncoding).toBe("utf8");
+    expect(result.provider?.taskkillStderrHadReplacement).toBe(false);
     expect(result.provider?.fallbackKillSucceeded).toBe(true);
     expect(result.provider?.outputGrewAfterTimeout).toBe(true);
     expect(result.provider?.timeoutOverrunMs).toBe(10000);

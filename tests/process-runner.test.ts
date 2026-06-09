@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import iconv from "iconv-lite";
 import {
   commandLineForCmd,
+  decodeTaskkillPreview,
   isWindowsCommandShim,
   killTimedOutProcess,
   nodeProcessRunner,
@@ -231,6 +233,30 @@ describe("Process runner spawn request resolution", () => {
     expect(result.fallbackKillError).toBe("fallback failed");
     expect(result.killSucceeded).toBe(false);
     expect(result.killFailureSummary).toContain("spawn taskkill ENOENT");
+  });
+
+  it("keeps UTF-8 taskkill stderr previews as UTF-8", () => {
+    const decoded = decodeTaskkillPreview(Buffer.from("ERROR: process not found", "utf8"), "win32");
+
+    expect(decoded.preview).toBe("ERROR: process not found");
+    expect(decoded.encoding).toBe("utf8");
+    expect(decoded.hadReplacement).toBe(false);
+  });
+
+  it("falls back to CP949 for Korean Windows taskkill output", () => {
+    const bytes = iconv.encode("오류: 프로세스를 찾을 수 없습니다.", "cp949");
+    const decoded = decodeTaskkillPreview(bytes, "win32");
+
+    expect(decoded.preview).toContain("오류");
+    expect(decoded.preview).toContain("프로세스");
+    expect(decoded.encoding).toBe("cp949");
+    expect(decoded.hadReplacement).toBe(false);
+  });
+
+  it("caps decoded taskkill previews", () => {
+    const decoded = decodeTaskkillPreview(Buffer.from("A".repeat(700), "utf8"), "win32");
+
+    expect(decoded.preview?.length).toBe(500);
   });
 
   it("computes whether output grew after timeout", () => {

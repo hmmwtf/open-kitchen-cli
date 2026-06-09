@@ -248,6 +248,10 @@ export function providerMetadataBase(input: {
   taskkillError?: string;
   taskkillStdoutPreview?: string;
   taskkillStderrPreview?: string;
+  taskkillStdoutEncoding?: "utf8" | "cp949" | "utf8_with_replacement";
+  taskkillStderrEncoding?: "utf8" | "cp949" | "utf8_with_replacement";
+  taskkillStdoutHadReplacement?: boolean;
+  taskkillStderrHadReplacement?: boolean;
   fallbackKillAttempted?: boolean;
   fallbackKillSucceeded?: boolean;
   fallbackKillError?: string;
@@ -287,6 +291,10 @@ export function providerMetadataBase(input: {
   taskkillError?: string;
   taskkillStdoutPreview?: string;
   taskkillStderrPreview?: string;
+  taskkillStdoutEncoding?: "utf8" | "cp949" | "utf8_with_replacement";
+  taskkillStderrEncoding?: "utf8" | "cp949" | "utf8_with_replacement";
+  taskkillStdoutHadReplacement?: boolean;
+  taskkillStderrHadReplacement?: boolean;
   fallbackKillAttempted?: boolean;
   fallbackKillSucceeded?: boolean;
   fallbackKillError?: string;
@@ -327,6 +335,10 @@ export function providerMetadataBase(input: {
     taskkillError: input.taskkillError,
     taskkillStdoutPreview: input.taskkillStdoutPreview,
     taskkillStderrPreview: input.taskkillStderrPreview,
+    taskkillStdoutEncoding: input.taskkillStdoutEncoding,
+    taskkillStderrEncoding: input.taskkillStderrEncoding,
+    taskkillStdoutHadReplacement: input.taskkillStdoutHadReplacement,
+    taskkillStderrHadReplacement: input.taskkillStderrHadReplacement,
     fallbackKillAttempted: input.fallbackKillAttempted,
     fallbackKillSucceeded: input.fallbackKillSucceeded,
     fallbackKillError: input.fallbackKillError,

@@ -257,6 +257,10 @@ export interface ProviderExecutionMetadata {
   taskkillError?: string;
   taskkillStdoutPreview?: string;
   taskkillStderrPreview?: string;
+  taskkillStdoutEncoding?: "utf8" | "cp949" | "utf8_with_replacement";
+  taskkillStderrEncoding?: "utf8" | "cp949" | "utf8_with_replacement";
+  taskkillStdoutHadReplacement?: boolean;
+  taskkillStderrHadReplacement?: boolean;
   fallbackKillAttempted?: boolean;
   fallbackKillSucceeded?: boolean;
   fallbackKillError?: string;

@@ -2,6 +2,7 @@ import { spawn, spawnSync } from "node:child_process";
 import type { SpawnSyncReturns } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import iconv from "iconv-lite";
 
 export interface ProcessRunRequest {
   command: string;
@@ -35,6 +36,10 @@ export interface ProcessRunResult {
   taskkillError?: string;
   taskkillStdoutPreview?: string;
   taskkillStderrPreview?: string;
+  taskkillStdoutEncoding?: TaskkillPreviewEncoding;
+  taskkillStderrEncoding?: TaskkillPreviewEncoding;
+  taskkillStdoutHadReplacement?: boolean;
+  taskkillStderrHadReplacement?: boolean;
   fallbackKillAttempted?: boolean;
   fallbackKillSucceeded?: boolean;
   fallbackKillError?: string;
@@ -70,6 +75,10 @@ export interface ProcessKillResult {
   taskkillError?: string;
   taskkillStdoutPreview?: string;
   taskkillStderrPreview?: string;
+  taskkillStdoutEncoding?: TaskkillPreviewEncoding;
+  taskkillStderrEncoding?: TaskkillPreviewEncoding;
+  taskkillStdoutHadReplacement?: boolean;
+  taskkillStderrHadReplacement?: boolean;
   fallbackKillAttempted?: boolean;
   fallbackKillSucceeded?: boolean;
   fallbackKillError?: string;
@@ -77,6 +86,7 @@ export interface ProcessKillResult {
 }
 
 export type ProcessKillMethod = "taskkill" | "child.kill" | "none";
+export type TaskkillPreviewEncoding = "utf8" | "cp949" | "utf8_with_replacement";
 
 type TaskkillRunner = (command: string, args: string[], options: Parameters<typeof spawnSync>[2]) => SpawnSyncReturns<Buffer>;
 
@@ -183,8 +193,10 @@ export function killTimedOutProcess(
     });
     const taskkillSucceeded = !result.error && result.status === 0;
     const taskkillError = result.error?.message;
-    const taskkillStdoutPreview = bufferPreview(result.stdout);
-    const taskkillStderrPreview = bufferPreview(result.stderr);
+    const stdoutPreview = decodeTaskkillPreview(result.stdout, platform);
+    const stderrPreview = decodeTaskkillPreview(result.stderr, platform);
+    const taskkillStdoutPreview = stdoutPreview.preview;
+    const taskkillStderrPreview = stderrPreview.preview;
     let fallbackKillAttempted = false;
     let fallbackKillSucceeded: boolean | undefined;
     let fallbackKillError: string | undefined;
@@ -221,6 +233,10 @@ export function killTimedOutProcess(
       taskkillError,
       taskkillStdoutPreview,
       taskkillStderrPreview,
+      taskkillStdoutEncoding: stdoutPreview.encoding,
+      taskkillStderrEncoding: stderrPreview.encoding,
+      taskkillStdoutHadReplacement: stdoutPreview.hadReplacement,
+      taskkillStderrHadReplacement: stderrPreview.hadReplacement,
       fallbackKillAttempted,
       fallbackKillSucceeded,
       fallbackKillError,
@@ -274,13 +290,40 @@ export function timeoutOutputDiagnostics(input: {
   };
 }
 
-function bufferPreview(value: Buffer | string | null | undefined): string | undefined {
+export function decodeTaskkillPreview(
+  value: Buffer | string | null | undefined,
+  platform: NodeJS.Platform = process.platform
+): { preview?: string; encoding?: TaskkillPreviewEncoding; hadReplacement?: boolean } {
   if (value === null || value === undefined) {
-    return undefined;
+    return {};
   }
-  const text = typeof value === "string" ? value : value.toString("utf8");
+  if (typeof value === "string") {
+    return previewWithEncoding(value, replacementCount(value) > 0 ? "utf8_with_replacement" : "utf8");
+  }
+
+  const utf8 = value.toString("utf8");
+  const utf8ReplacementCount = replacementCount(utf8);
+  if (platform === "win32" && utf8ReplacementCount > 0) {
+    const cp949 = iconv.decode(value, "cp949");
+    if (replacementCount(cp949) < utf8ReplacementCount || (replacementCount(cp949) === 0 && cp949.trim().length > 0)) {
+      return previewWithEncoding(cp949, "cp949");
+    }
+  }
+
+  return previewWithEncoding(utf8, utf8ReplacementCount > 0 ? "utf8_with_replacement" : "utf8");
+}
+
+function previewWithEncoding(text: string, encoding: TaskkillPreviewEncoding): { preview?: string; encoding?: TaskkillPreviewEncoding; hadReplacement?: boolean } {
   const normalized = text.replace(/\s+/g, " ").trim();
-  return normalized ? normalized.slice(0, KILL_PREVIEW_CHARS) : undefined;
+  return {
+    preview: normalized ? normalized.slice(0, KILL_PREVIEW_CHARS) : undefined,
+    encoding,
+    hadReplacement: replacementCount(text) > 0
+  };
+}
+
+function replacementCount(value: string): number {
+  return [...value].filter((char) => char === "\uFFFD").length;
 }
 
 function killSummary(input: {
