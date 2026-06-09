@@ -73,7 +73,13 @@ dogfooding and QA faster. Users should not need to manually open `result.json`,
 
 `ok stats` turns recent ledger runs into product-level signals: completion
 rate, timeout rate, provider duration, command count, adapter grouping,
-prompt-category grouping, and instant quality proxies.
+prompt-category grouping, timeout-with-answer separation, and instant quality
+proxies.
+
+Provider timeouts are not flattened into one failure shape. When a timed-out
+provider run has a structured final answer, OpenKitchen keeps the failed run
+status but surfaces the answer as salvageable evidence in the ledger reader
+surface.
 
 **Provider-neutral execution**
 
@@ -137,6 +143,7 @@ Implemented today:
 - provider diagnostics and explicit smoke checks
 - local filesystem run ledgers
 - ledger inspection and stats shortcuts
+- timeout observability and timeout-with-answer handling
 - validation evidence and local validation commands
 - approval resume
 - built-in recipes and sequential recipe workflows

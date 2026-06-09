@@ -188,7 +188,14 @@ ok show <run-id> --ledger-root "output\manual-runs"
 ```
 
 `ok show` includes status, mode, adapter, strategy, provider duration/timeout,
-RepoMap files/symbols, output size, command counts, and a final answer preview.
+timeout-with-answer status, RepoMap files/symbols, output size, command counts,
+and a final answer preview.
+
+When a provider times out after producing a structured final answer,
+OpenKitchen keeps the run status as `failed` but marks the provider output as
+timeout-with-answer. New runs may also include a `partial-answer-<taskId>.md`
+artifact. This keeps timeout accounting honest while preserving useful output
+for inspection.
 
 ### `logs`
 
@@ -220,12 +227,18 @@ raw provider output or final answer bodies. The default text output includes:
 
 - summary metrics: run count, completion rate, timeout rate, average total and
   provider duration, average command count, output sizes, and runs over 14s
+- timeout quality metrics: timeout with answer, timeout without structured
+  answer, and average close delay after timeout when available
 - grouping by adapter
 - grouping by inferred prompt category
 - instant quality proxies: inferred instant runs, zero-command rate, RepoMap
-  truncation count, and average files/symbols
+  truncation count, timeout quality metrics, and average files/symbols
 
 Use `--json` when another script or report needs parseable output.
+
+Timeout metrics are conservative. Older ledger runs that do not have new
+partial-answer metadata are still readable; `ok stats` can infer timeout with
+answer when a timed-out run has a `last_agent_message` final answer.
 
 ### Direct Artifact Reads On Windows PowerShell 5.1
 

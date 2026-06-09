@@ -254,6 +254,8 @@ ok stats --json
 - strategy
 - ledger path
 - provider duration and timeout when available
+- timeout-with-answer status when a timed-out provider still produced a
+  structured final answer
 - RepoMap files and symbols
 - output size
 - command counts
@@ -265,7 +267,9 @@ chunks by default.
 `ok stats` summarizes recent local runs. It reports completion and timeout
 rates, average duration, command counts, raw/final answer sizes, adapter
 grouping, prompt-category grouping, and instant quality proxies such as
-zero-command rate and RepoMap truncation.
+zero-command rate and RepoMap truncation. It also separates provider timeouts
+with a structured answer from timeouts without a usable structured answer, so a
+failed run can still be inspected when the provider produced salvageable output.
 
 The lower-level ledger commands are still available:
 
@@ -303,6 +307,7 @@ Compare:
 
 - total latency
 - provider duration
+- whether a timeout still produced a structured answer
 - command count
 - blocked or failed commands
 - raw output size

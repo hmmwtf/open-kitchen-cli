@@ -255,6 +255,7 @@ ok stats --json
 - strategy
 - ledger path
 - provider duration과 timeout
+- provider가 timeout되었지만 구조화된 final answer를 남겼는지 여부
 - RepoMap files와 symbols
 - output size
 - command count
@@ -266,7 +267,9 @@ chunk는 기본적으로 압축해서 표시합니다.
 `ok stats`는 최근 local run을 요약합니다. completion/timeout rate, 평균
 duration, command count, raw/final answer size, adapter별 grouping,
 prompt category별 grouping, zero-command rate와 RepoMap truncation 같은
-instant quality proxy를 보여줍니다.
+instant quality proxy를 보여줍니다. 또한 provider timeout을 구조화된 답변이
+있는 timeout과 usable structured answer가 없는 timeout으로 나누어 보여줍니다.
+그래서 실패로 기록된 run도 salvage 가능한 답변이 있는지 빠르게 확인할 수 있습니다.
 
 낮은 수준의 ledger command도 그대로 사용할 수 있습니다.
 
@@ -304,6 +307,7 @@ ok prep --instant --adapter codex-cli "README와 CLI 구조만 5줄로 요약해
 
 - total latency
 - provider duration
+- timeout 중 구조화된 답변이 남았는지
 - command count
 - blocked 또는 failed command
 - raw output size
