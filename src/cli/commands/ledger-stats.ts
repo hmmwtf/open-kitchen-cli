@@ -25,6 +25,9 @@ interface RunStatsSample {
   blockedCount: number;
   failedCount: number;
   timedOut: boolean;
+  timeoutWithAnswer: boolean;
+  timeoutWithoutStructuredAnswer: boolean;
+  closeDelayAfterTimeoutMs?: number;
   rawOutputLength?: number;
   finalAnswerLength?: number;
   filesIncluded?: number;
@@ -72,6 +75,9 @@ interface StatsSummary {
   avgFilesIncluded?: number;
   avgSymbolsIncluded?: number;
   runsOver14s: number;
+  timeoutWithAnswerCount: number;
+  timeoutWithoutStructuredAnswerCount: number;
+  avgCloseDelayAfterTimeoutMs?: number;
 }
 
 interface GroupStats {
@@ -89,6 +95,9 @@ interface InstantQualityProxies {
   inferredInstantRuns: number;
   zeroCommandRate: number;
   repoMapTruncated: number;
+  timeoutWithAnswerCount: number;
+  timeoutWithoutStructuredAnswerCount: number;
+  avgCloseDelayAfterTimeoutMs?: number;
   avgFilesIncluded?: number;
   avgSymbolsIncluded?: number;
 }
@@ -147,6 +156,9 @@ async function buildStatsReport(options: LedgerStatsOptions): Promise<StatsRepor
       inferredInstantRuns: samples.filter((sample) => sample.inferredInstant).length,
       zeroCommandRate: rate(samples.filter((sample) => sample.commandCount === 0).length, samples.length),
       repoMapTruncated: samples.filter((sample) => sample.repoMapTruncated).length,
+      timeoutWithAnswerCount: samples.filter((sample) => sample.timeoutWithAnswer).length,
+      timeoutWithoutStructuredAnswerCount: samples.filter((sample) => sample.timeoutWithoutStructuredAnswer).length,
+      avgCloseDelayAfterTimeoutMs: average(samples.map((sample) => sample.closeDelayAfterTimeoutMs)),
       avgFilesIncluded: average(samples.map((sample) => sample.filesIncluded)),
       avgSymbolsIncluded: average(samples.map((sample) => sample.symbolsIncluded))
     }
@@ -209,7 +221,15 @@ async function readRunStatsSample(runPath: string, run: LedgerRunMetadata): Prom
   const status = run.status ?? stringValue(result?.status) ?? "unknown";
   const outputSize = outputs.find((output) => recordValue(recordValue(output, "provider")?.readability, "outputSize"));
   const providerReadability = recordValue(recordValue(outputSize, "provider"), "readability");
+  const providerMetadata = recordValue(outputSize, "provider");
+  const partialAnswer = recordValue(providerMetadata, "partialAnswer");
   const outputSizeRecord = recordValue(providerReadability, "outputSize");
+  const finalAnswerSource = stringValue(providerReadability?.finalAnswerSource);
+  const finalAnswerLength =
+    numberValue(outputSizeRecord?.finalAnswerLength) ?? (await fileSize(path.join(runPath, "artifacts", "agent-output-direct.md"))) ?? finalAnswer?.length;
+  const timeoutWithAnswer =
+    Boolean(providerTimedOut) &&
+    (booleanValue(partialAnswer?.available) === true || (finalAnswerSource === "last_agent_message" && (finalAnswerLength ?? 0) > 0));
 
   return {
     runId: run.runId,
@@ -226,8 +246,11 @@ async function readRunStatsSample(runPath: string, run: LedgerRunMetadata): Prom
     blockedCount: commandEvents.filter((event) => event.type.includes("blocked")).length,
     failedCount: commandEvents.filter((event) => event.type.includes("failed")).length,
     timedOut: Boolean(providerTimedOut),
+    timeoutWithAnswer,
+    timeoutWithoutStructuredAnswer: Boolean(providerTimedOut) && !timeoutWithAnswer,
+    closeDelayAfterTimeoutMs: numberValue(providerMetadata?.closeDelayAfterTimeoutMs),
     rawOutputLength: (await fileSize(path.join(runPath, "artifacts", "provider-raw-output-direct.txt"))) ?? numberValue(outputSizeRecord?.rawLength) ?? providerRaw?.length,
-    finalAnswerLength: (await fileSize(path.join(runPath, "artifacts", "agent-output-direct.md"))) ?? numberValue(outputSizeRecord?.finalAnswerLength) ?? finalAnswer?.length,
+    finalAnswerLength,
     filesIncluded: numberValue(repoSummary?.filesIncluded),
     symbolsIncluded: numberValue(repoSummary?.symbolsIncluded),
     repoMapTruncated: booleanValue(repoBudget?.truncated) ?? booleanValue(repoSummary?.truncated),
@@ -253,7 +276,10 @@ function buildSummary(samples: RunStatsSample[]): StatsSummary {
     avgFinalAnswerLength: average(samples.map((sample) => sample.finalAnswerLength)),
     avgFilesIncluded: average(samples.map((sample) => sample.filesIncluded)),
     avgSymbolsIncluded: average(samples.map((sample) => sample.symbolsIncluded)),
-    runsOver14s: samples.filter((sample) => (sample.totalDurationMs ?? 0) > OVER_14S_MS).length
+    runsOver14s: samples.filter((sample) => (sample.totalDurationMs ?? 0) > OVER_14S_MS).length,
+    timeoutWithAnswerCount: samples.filter((sample) => sample.timeoutWithAnswer).length,
+    timeoutWithoutStructuredAnswerCount: samples.filter((sample) => sample.timeoutWithoutStructuredAnswer).length,
+    avgCloseDelayAfterTimeoutMs: average(samples.map((sample) => sample.closeDelayAfterTimeoutMs))
   };
 }
 
@@ -302,6 +328,8 @@ function printStatsReport(report: StatsReport): void {
   console.log(`Completed: ${report.summary.completed}`);
   console.log(`Failed: ${report.summary.failed}`);
   console.log(`Timed out: ${report.summary.timedOut}`);
+  console.log(`Timeout with answer: ${report.summary.timeoutWithAnswerCount}`);
+  console.log(`Timeout without structured answer: ${report.summary.timeoutWithoutStructuredAnswerCount}`);
   console.log(`Completion rate: ${formatPercent(report.summary.completionRate)}`);
   console.log(`Timeout rate: ${formatPercent(report.summary.timeoutRate)}`);
   console.log(`Avg total: ${formatMs(report.summary.avgTotalDurationMs)}`);
@@ -310,6 +338,7 @@ function printStatsReport(report: StatsReport): void {
   console.log(`Avg raw output: ${formatChars(report.summary.avgRawOutputLength)}`);
   console.log(`Avg final answer: ${formatChars(report.summary.avgFinalAnswerLength)}`);
   console.log(`Runs over 14s: ${report.summary.runsOver14s}`);
+  console.log(`Avg close delay after timeout: ${formatMs(report.summary.avgCloseDelayAfterTimeoutMs)}`);
   console.log("");
   console.log("By Adapter");
   console.log("Adapter | Runs | Completed | Timeout | Avg Total | Avg Cmds");
@@ -327,6 +356,9 @@ function printStatsReport(report: StatsReport): void {
   console.log(`Inferred instant runs: ${report.instantQualityProxies.inferredInstantRuns}`);
   console.log(`Zero-command rate: ${formatPercent(report.instantQualityProxies.zeroCommandRate)}`);
   console.log(`RepoMap truncated: ${report.instantQualityProxies.repoMapTruncated}`);
+  console.log(`Timeout with answer: ${report.instantQualityProxies.timeoutWithAnswerCount}`);
+  console.log(`Timeout without structured answer: ${report.instantQualityProxies.timeoutWithoutStructuredAnswerCount}`);
+  console.log(`Avg close delay after timeout: ${formatMs(report.instantQualityProxies.avgCloseDelayAfterTimeoutMs)}`);
   console.log(
     `Avg files/symbols: ${formatNumber(report.instantQualityProxies.avgFilesIncluded)} / ${formatNumber(report.instantQualityProxies.avgSymbolsIncluded)}`
   );

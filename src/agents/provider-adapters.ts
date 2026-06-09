@@ -1,6 +1,6 @@
 import type { AgentAdapter, AgentAdapterInput, AgentAdapterMetadata } from "./adapter.js";
 import type { AgentExecutionResult } from "../core/types.js";
-import type { ProcessRunner } from "./process-runner.js";
+import type { ProcessRunner, ProcessRunResult } from "./process-runner.js";
 import { nodeProcessRunner } from "./process-runner.js";
 import { resolveProviderCommandForAdapter } from "./provider-command.js";
 import {
@@ -335,7 +335,8 @@ async function runCliAdapter(input: {
         outputText: parsed.text,
         rawOutput,
         streamStats: parsed.stats,
-        readability: withArtifactRefs(parsed.readability, input.input.task.id)
+        readability: parsed.readability,
+        processResult: result
       });
     }
     if (result.exitCode !== 0) {
@@ -612,6 +613,7 @@ function failedProviderResult(input: {
   rawOutput?: string;
   streamStats?: ProviderStreamStats;
   readability?: ProviderOutputReadability;
+  processResult?: ProcessRunResult;
 }): AgentExecutionResult {
   const classification = classifyProviderFailure({
     adapter: input.metadata,
@@ -623,6 +625,15 @@ function failedProviderResult(input: {
   });
   const outputArtifactName = `agent-output-${input.input.task.id}.md`;
   const rawOutputArtifactName = `provider-raw-output-${input.input.task.id}.txt`;
+  const partialAnswerArtifactName = partialAnswerArtifactNameFor(input.input.task.id, input.timedOut, input.readability);
+  const readability = input.readability
+    ? withArtifactRefs(
+        readabilityForTimeout(input.readability, input.timedOut, partialAnswerArtifactName),
+        input.input.task.id,
+        input.rawOutput ? rawOutputArtifactName : undefined,
+        partialAnswerArtifactName
+      )
+    : undefined;
   return {
     taskId: input.input.task.id,
     agentRole: input.input.agentRole,
@@ -641,10 +652,15 @@ function failedProviderResult(input: {
         resolvedCommand: input.resolvedCommand,
         exitCode: input.exitCode,
         timedOut: input.timedOut,
+        timeoutTriggeredAfterMs: input.processResult?.timeoutTriggeredAfterMs,
+        closedAfterMs: input.processResult?.closedAfterMs,
+        closeDelayAfterTimeoutMs: input.processResult?.closeDelayAfterTimeoutMs,
+        processTreeKillAttempted: input.processResult?.processTreeKillAttempted,
+        processTreeKillSucceeded: input.processResult?.processTreeKillSucceeded,
+        processKillError: input.processResult?.processKillError,
+        partialAnswer: partialAnswerMetadata(partialAnswerArtifactName, input.readability),
         streamStats: input.streamStats,
-        readability: input.readability
-          ? withArtifactRefs(input.readability, input.input.task.id, input.rawOutput ? rawOutputArtifactName : undefined)
-          : undefined
+        readability
       }),
       failureReason: input.reason,
       failureCategory: classification.failureCategory,
@@ -656,16 +672,62 @@ function failedProviderResult(input: {
 function withArtifactRefs(
   readability: ProviderOutputReadability,
   taskId: string,
-  rawOutputArtifactName = `provider-raw-output-${taskId}.txt`
+  rawOutputArtifactName = `provider-raw-output-${taskId}.txt`,
+  partialAnswerArtifactName?: string
 ): ProviderOutputReadability {
   return {
     ...readability,
     artifactRefs: {
       ...readability.artifactRefs,
       outputArtifactName: `agent-output-${taskId}.md`,
-      ...(rawOutputArtifactName ? { rawOutputArtifactName } : {})
+      ...(rawOutputArtifactName ? { rawOutputArtifactName } : {}),
+      ...(partialAnswerArtifactName ? { partialAnswerArtifactName } : {})
     }
   };
+}
+
+function partialAnswerArtifactNameFor(taskId: string, timedOut: boolean | undefined, readability: ProviderOutputReadability | undefined): string | undefined {
+  if (!timedOut || !hasStructuredFinalAnswer(readability)) {
+    return undefined;
+  }
+  return `partial-answer-${taskId}.md`;
+}
+
+function partialAnswerMetadata(artifactName: string | undefined, readability: ProviderOutputReadability | undefined) {
+  if (!artifactName || !readability?.finalAnswer) {
+    return undefined;
+  }
+  return {
+    available: true,
+    source: readability.finalAnswerSource,
+    length: readability.finalAnswer.length,
+    artifactName,
+    reason: "timed_out_with_last_agent_message" as const
+  };
+}
+
+function readabilityForTimeout(
+  readability: ProviderOutputReadability,
+  timedOut: boolean | undefined,
+  partialAnswerArtifactName: string | undefined
+): ProviderOutputReadability {
+  if (!timedOut) {
+    return readability;
+  }
+  const qualityFlags = new Set(readability.qualityFlags);
+  if (partialAnswerArtifactName) {
+    qualityFlags.add("timed_out_with_answer");
+  } else {
+    qualityFlags.add("timed_out_without_structured_answer");
+  }
+  return {
+    ...readability,
+    qualityFlags: [...qualityFlags]
+  };
+}
+
+function hasStructuredFinalAnswer(readability: ProviderOutputReadability | undefined): boolean {
+  return readability?.finalAnswerSource === "last_agent_message" && Boolean(readability.finalAnswer?.trim());
 }
 
 async function emitProviderEvent(input: AgentAdapterInput, event: Parameters<NonNullable<AgentAdapterInput["onProviderEvent"]>>[0]): Promise<void> {

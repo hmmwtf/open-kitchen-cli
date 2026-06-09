@@ -216,6 +216,23 @@ describe("CLI smoke tests", () => {
     expect(logs.join("\n")).not.toContain("Final answer:");
   });
 
+  it("shows timed-out provider runs with salvaged partial answer metadata", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "open-kitchen-cli-show-partial-answer-"));
+    await createProgram().parseAsync(["node", "open-kitchen", "prep", "--ledger-root", root, "inspect this repo"]);
+    const runId = findRunId();
+    await addTimedOutProviderAnswer(path.join(root, runId, "result.json"), "Salvaged answer.");
+
+    logs.length = 0;
+    await createProgram().parseAsync(["node", "open-kitchen", "show", "--ledger-root", root, runId]);
+
+    const output = logs.join("\n");
+    expect(output).toContain("timedOut yes");
+    expect(output).toContain("timedOutWithAnswer yes");
+    expect(output).toContain("closeDelayAfterTimeout 10000ms");
+    expect(output).toContain("partialAnswer partial-answer-direct.md");
+    expect(output).toContain("Salvaged answer.");
+  });
+
   it("prints compact logs, raw logs, provider-only logs, and clear missing-run errors", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "open-kitchen-cli-logs-"));
     await createProgram().parseAsync(["node", "open-kitchen", "prep", "--ledger-root", root, "inspect this repo"]);
@@ -270,6 +287,8 @@ describe("CLI smoke tests", () => {
       completedAt: "2026-06-08T00:00:17.000Z",
       providerDurationMs: 15000,
       timedOut: true,
+      timeoutWithAnswer: true,
+      closeDelayAfterTimeoutMs: 14000,
       rawOutput: "RAW_BODY_SHOULD_NOT_PRINT",
       finalAnswer: "FINAL_BODY_SHOULD_NOT_PRINT",
       filesIncluded: 2,
@@ -303,10 +322,13 @@ describe("CLI smoke tests", () => {
     expect(output).toContain("Runs: 2");
     expect(output).toContain("Completed: 1");
     expect(output).toContain("Timed out: 1");
+    expect(output).toContain("Timeout with answer: 1");
+    expect(output).toContain("Timeout without structured answer: 0");
     expect(output).toContain("Completion rate: 50.0%");
     expect(output).toContain("Avg total: 12.50s");
     expect(output).toContain("Avg provider: 12.00s");
     expect(output).toContain("Avg commands: 0.5");
+    expect(output).toContain("Avg close delay after timeout: 14.00s");
     expect(output).toContain("By Adapter");
     expect(output).toContain("codex-cli | 2 | 1 | 1");
     expect(output).toContain("By Prompt Category");
@@ -347,7 +369,7 @@ describe("CLI smoke tests", () => {
     const parsed = JSON.parse(logs.join("\n")) as {
       skippedCount: number;
       partialCount: number;
-      summary: { runs: number; completed: number; completionRate: number };
+      summary: { runs: number; completed: number; completionRate: number; timeoutWithAnswerCount: number };
       byAdapter: Array<{ key: string; runs: number }>;
       byPromptCategory: Array<{ key: string; runs: number }>;
       instantQualityProxies: { inferredInstantRuns: number };
@@ -357,6 +379,7 @@ describe("CLI smoke tests", () => {
     expect(parsed.summary.runs).toBe(1);
     expect(parsed.summary.completed).toBe(1);
     expect(parsed.summary.completionRate).toBe(1);
+    expect(parsed.summary.timeoutWithAnswerCount).toBe(0);
     expect(parsed.byAdapter).toContainEqual(expect.objectContaining({ key: "codex-cli", runs: 1 }));
     expect(parsed.byPromptCategory).toContainEqual(expect.objectContaining({ key: "provider", runs: 1 }));
     expect(parsed.instantQualityProxies.inferredInstantRuns).toBe(0);
@@ -744,6 +767,57 @@ describe("CLI smoke tests", () => {
     await writeFile(path.join(path.dirname(resultPath), "artifacts", "agent-output-direct.md"), output, "utf8");
   }
 
+  async function addTimedOutProviderAnswer(resultPath: string, answer: string): Promise<void> {
+    const result = JSON.parse(await readFile(resultPath, "utf8")) as {
+      status: string;
+      outputs: Array<Record<string, unknown>>;
+    };
+    result.status = "failed";
+    result.outputs[0] = {
+      ...result.outputs[0],
+      status: "failed",
+      output: "Codex CLI Adapter did not finish before the configured timeout.",
+      provider: {
+        adapterName: "codex-cli",
+        provider: "openai",
+        surface: "subprocess",
+        durationMs: 25000,
+        timeoutMs: 15000,
+        timeoutSource: "request",
+        timedOut: true,
+        closeDelayAfterTimeoutMs: 10000,
+        partialAnswer: {
+          available: true,
+          source: "last_agent_message",
+          length: answer.length,
+          artifactName: "partial-answer-direct.md",
+          reason: "timed_out_with_last_agent_message"
+        },
+        readability: {
+          finalAnswer: answer,
+          finalAnswerPreview: answer,
+          finalAnswerSource: "last_agent_message",
+          warnings: [],
+          commands: [],
+          qualityFlags: ["timed_out_with_answer"],
+          outputSize: {
+            rawLength: 100,
+            extractedTextLength: answer.length,
+            finalAnswerLength: answer.length,
+            largeOutput: false,
+            largeOutputThreshold: 100000
+          },
+          artifactRefs: {
+            outputArtifactName: "agent-output-direct.md",
+            partialAnswerArtifactName: "partial-answer-direct.md"
+          }
+        }
+      }
+    };
+    await writeFile(resultPath, `${JSON.stringify(result, null, 2)}\n`, "utf8");
+    await writeFile(path.join(path.dirname(resultPath), "artifacts", "partial-answer-direct.md"), answer, "utf8");
+  }
+
   async function appendProviderEvents(eventsPath: string): Promise<void> {
     const original = await readFile(eventsPath, "utf8");
     const events = [
@@ -805,6 +879,8 @@ describe("CLI smoke tests", () => {
       completedAt?: string;
       providerDurationMs?: number;
       timedOut?: boolean;
+      timeoutWithAnswer?: boolean;
+      closeDelayAfterTimeoutMs?: number;
       commandEvents?: number;
       rawOutput?: string;
       finalAnswer?: string;
@@ -853,7 +929,45 @@ describe("CLI smoke tests", () => {
           outputs: [
             {
               output: input.finalAnswer ?? "",
-              rawOutput: input.rawOutput ?? ""
+              rawOutput: input.rawOutput ?? "",
+              ...(input.adapter === "codex-cli"
+                ? {
+                    provider: {
+                      adapterName: "codex-cli",
+                      provider: "openai",
+                      surface: "subprocess",
+                      durationMs: input.providerDurationMs ?? 0,
+                      timeoutMs: 15000,
+                      timeoutSource: "request",
+                      timedOut: input.timedOut,
+                      closeDelayAfterTimeoutMs: input.closeDelayAfterTimeoutMs,
+                      partialAnswer: input.timeoutWithAnswer
+                        ? {
+                            available: true,
+                            source: "last_agent_message",
+                            length: (input.finalAnswer ?? "").length,
+                            artifactName: "partial-answer-direct.md",
+                            reason: "timed_out_with_last_agent_message"
+                          }
+                        : undefined,
+                      readability: {
+                        finalAnswer: input.finalAnswer ?? "",
+                        finalAnswerPreview: input.finalAnswer ?? "",
+                        finalAnswerSource: input.timeoutWithAnswer ? "last_agent_message" : "raw_text_fallback",
+                        warnings: [],
+                        commands: [],
+                        qualityFlags: input.timeoutWithAnswer ? ["timed_out_with_answer"] : [],
+                        outputSize: {
+                          rawLength: (input.rawOutput ?? "").length,
+                          extractedTextLength: (input.finalAnswer ?? "").length,
+                          finalAnswerLength: (input.finalAnswer ?? "").length,
+                          largeOutput: false,
+                          largeOutputThreshold: 100000
+                        }
+                      }
+                    }
+                  }
+                : {})
             }
           ]
         },

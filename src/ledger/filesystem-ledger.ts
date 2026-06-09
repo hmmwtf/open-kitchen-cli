@@ -258,6 +258,11 @@ export class FilesystemLedger {
       if (output.rawOutput && output.rawOutputArtifactName) {
         await writeFile(path.join(artifactPath, output.rawOutputArtifactName), output.rawOutput, "utf8");
       }
+      const partialAnswerArtifactName = output.provider?.partialAnswer?.artifactName;
+      const partialAnswer = output.provider?.readability?.finalAnswer;
+      if (partialAnswerArtifactName && partialAnswer) {
+        await writeFile(path.join(artifactPath, partialAnswerArtifactName), partialAnswer, "utf8");
+      }
       await this.appendEvent(runId, {
         timestamp: isoNow(),
         type: output.status === "failed" ? "agent.failed" : "agent.completed",
@@ -825,6 +830,8 @@ function renderResultMarkdown(result: LedgerResult): string {
       ...(firstProvider?.resolvedCommand ? [`Resolved command: ${firstProvider.resolvedCommand}`] : []),
       ...(firstProvider?.timeoutMs ? [`Timeout: ${firstProvider.timeoutMs}ms (${firstProvider.timeoutSource ?? "unknown"})`] : []),
       ...(firstProvider?.timedOut ? [`Timed out: yes`] : []),
+      ...(firstProvider?.partialAnswer?.available ? [`Timed out with answer: yes`] : []),
+      ...(firstProvider?.closeDelayAfterTimeoutMs !== undefined ? [`Close delay after timeout: ${firstProvider.closeDelayAfterTimeoutMs}ms`] : []),
       ...(firstProvider?.exitCode !== undefined ? [`Exit code: ${firstProvider.exitCode}`] : []),
       `Provider outputs: ${providerOutputs.length}`,
       `Provider failures: ${providerOutputs.filter((output) => output.status === "failed").length}`,
@@ -841,7 +848,10 @@ function renderResultMarkdown(result: LedgerResult): string {
       ...(qualityFlags.length > 0 ? [`Quality flags: ${qualityFlags.join(", ")}`] : []),
       ...providerOutputs.flatMap((output) => {
         const refs = output.provider?.readability?.artifactRefs;
-        return refs?.rawOutputArtifactName ? [`Raw output artifact: ${refs.rawOutputArtifactName}`] : [];
+        return [
+          ...(refs?.partialAnswerArtifactName ? [`Partial answer artifact: ${refs.partialAnswerArtifactName}`] : []),
+          ...(refs?.rawOutputArtifactName ? [`Raw output artifact: ${refs.rawOutputArtifactName}`] : [])
+        ];
       })
     );
   }

@@ -5,6 +5,8 @@ import path from "node:path";
 import {
   commandLineForCmd,
   isWindowsCommandShim,
+  killTimedOutProcess,
+  nodeProcessRunner,
   quoteForCmd,
   resolveNpmShimScriptPath,
   resolveSpawnRequest,
@@ -131,6 +133,57 @@ describe("Process runner spawn request resolution", () => {
 
   it("uses piped stdin when process input is provided", () => {
     expect(stdioForRequest({ input: "hello" })).toEqual(["pipe", "pipe", "pipe"]);
+  });
+
+  it("records timeout observability when a process is killed", async () => {
+    const result = await nodeProcessRunner({
+      command: process.execPath,
+      args: ["-e", "setTimeout(() => {}, 1000)"],
+      timeoutMs: 20
+    });
+
+    expect(result.timedOut).toBe(true);
+    expect(result.timeoutTriggeredAfterMs).toBeGreaterThanOrEqual(0);
+    expect(result.closedAfterMs).toBeGreaterThanOrEqual(result.timeoutTriggeredAfterMs ?? 0);
+    expect(result.closeDelayAfterTimeoutMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("uses taskkill for Windows process tree timeouts and does not call fallback when it succeeds", () => {
+    let fallbackCalled = false;
+    const calls: Array<{ command: string; args: string[] }> = [];
+    const result = killTimedOutProcess(
+      1234,
+      () => {
+        fallbackCalled = true;
+        return true;
+      },
+      "win32",
+      (command, args) => {
+        calls.push({ command, args });
+        return { status: 0, signal: null, output: [], pid: 1, stdout: Buffer.from(""), stderr: Buffer.from("") };
+      }
+    );
+
+    expect(calls).toEqual([{ command: "taskkill", args: ["/PID", "1234", "/T", "/F"] }]);
+    expect(fallbackCalled).toBe(false);
+    expect(result).toEqual({ processTreeKillAttempted: true, processTreeKillSucceeded: true, processKillError: undefined });
+  });
+
+  it("falls back to child.kill when Windows taskkill fails", () => {
+    let fallbackCalled = false;
+    const result = killTimedOutProcess(
+      1234,
+      () => {
+        fallbackCalled = true;
+        return true;
+      },
+      "win32",
+      () => ({ status: 1, signal: null, output: [], pid: 1, stdout: Buffer.from(""), stderr: Buffer.from("") })
+    );
+
+    expect(fallbackCalled).toBe(true);
+    expect(result.processTreeKillAttempted).toBe(true);
+    expect(result.processTreeKillSucceeded).toBe(false);
   });
 });
 

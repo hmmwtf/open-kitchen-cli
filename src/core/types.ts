@@ -2,6 +2,7 @@ import type { AgentAdapterMetadata, AgentAdapterName } from "../agents/adapter.j
 import type {
   ProviderFailureCategory,
   ProviderOutputReadability,
+  ProviderPartialAnswerMetadata,
   ProviderStreamStats,
   ProviderTimeoutSource
 } from "../agents/provider-reliability.js";
@@ -241,6 +242,13 @@ export interface ProviderExecutionMetadata {
   timeoutMs?: number;
   timeoutSource?: ProviderTimeoutSource;
   timedOut?: boolean;
+  timeoutTriggeredAfterMs?: number;
+  closedAfterMs?: number;
+  closeDelayAfterTimeoutMs?: number;
+  processTreeKillAttempted?: boolean;
+  processTreeKillSucceeded?: boolean;
+  processKillError?: string;
+  partialAnswer?: ProviderPartialAnswerMetadata;
   streamStats?: ProviderStreamStats;
   readability?: ProviderOutputReadability;
 }

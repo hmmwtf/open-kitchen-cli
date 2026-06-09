@@ -30,7 +30,9 @@ export type ProviderQualityFlag =
   | "command_failure"
   | "missing_final_answer"
   | "raw_text_fallback"
-  | "stream_parse_failure";
+  | "stream_parse_failure"
+  | "timed_out_with_answer"
+  | "timed_out_without_structured_answer";
 
 export interface ProviderWarning {
   source: "stdout" | "stderr" | "parser";
@@ -55,6 +57,7 @@ export interface ProviderOutputSize {
 export interface ProviderOutputArtifactRefs {
   outputArtifactName?: string;
   rawOutputArtifactName?: string;
+  partialAnswerArtifactName?: string;
 }
 
 export interface ProviderOutputReadability {
@@ -66,6 +69,14 @@ export interface ProviderOutputReadability {
   qualityFlags: ProviderQualityFlag[];
   outputSize: ProviderOutputSize;
   artifactRefs?: ProviderOutputArtifactRefs;
+}
+
+export interface ProviderPartialAnswerMetadata {
+  available: boolean;
+  source?: ProviderFinalAnswerSource;
+  length?: number;
+  artifactName?: string;
+  reason?: "timed_out_with_last_agent_message";
 }
 
 export interface ProviderOutputParseResult {
@@ -222,6 +233,13 @@ export function providerMetadataBase(input: {
   resolvedCommand?: string;
   exitCode?: number;
   timedOut?: boolean;
+  timeoutTriggeredAfterMs?: number;
+  closedAfterMs?: number;
+  closeDelayAfterTimeoutMs?: number;
+  processTreeKillAttempted?: boolean;
+  processTreeKillSucceeded?: boolean;
+  processKillError?: string;
+  partialAnswer?: ProviderPartialAnswerMetadata;
   streamStats?: ProviderStreamStats;
   readability?: ProviderOutputReadability;
 }): {
@@ -235,6 +253,13 @@ export function providerMetadataBase(input: {
   timeoutMs: number;
   timeoutSource: ProviderTimeoutSource;
   timedOut?: boolean;
+  timeoutTriggeredAfterMs?: number;
+  closedAfterMs?: number;
+  closeDelayAfterTimeoutMs?: number;
+  processTreeKillAttempted?: boolean;
+  processTreeKillSucceeded?: boolean;
+  processKillError?: string;
+  partialAnswer?: ProviderPartialAnswerMetadata;
   streamStats?: ProviderStreamStats;
   readability?: ProviderOutputReadability;
 } {
@@ -249,6 +274,13 @@ export function providerMetadataBase(input: {
     timeoutMs: input.timeout.timeoutMs,
     timeoutSource: input.timeout.timeoutSource,
     timedOut: input.timedOut,
+    timeoutTriggeredAfterMs: input.timeoutTriggeredAfterMs,
+    closedAfterMs: input.closedAfterMs,
+    closeDelayAfterTimeoutMs: input.closeDelayAfterTimeoutMs,
+    processTreeKillAttempted: input.processTreeKillAttempted,
+    processTreeKillSucceeded: input.processTreeKillSucceeded,
+    processKillError: input.processKillError,
+    partialAnswer: input.partialAnswer,
     streamStats: input.streamStats,
     readability: input.readability
   };

@@ -1,4 +1,5 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import type { SpawnSyncReturns } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -19,6 +20,12 @@ export interface ProcessRunResult {
   signal?: string;
   timedOut: boolean;
   durationMs: number;
+  timeoutTriggeredAfterMs?: number;
+  closedAfterMs?: number;
+  closeDelayAfterTimeoutMs?: number;
+  processTreeKillAttempted?: boolean;
+  processTreeKillSucceeded?: boolean;
+  processKillError?: string;
 }
 
 export type ProcessRunner = (request: ProcessRunRequest) => Promise<ProcessRunResult>;
@@ -30,6 +37,14 @@ export interface ResolvedSpawnRequest {
 }
 
 export type ProcessRunnerStdio = ["pipe" | "ignore", "pipe", "pipe"];
+
+export interface ProcessKillResult {
+  processTreeKillAttempted: boolean;
+  processTreeKillSucceeded: boolean;
+  processKillError?: string;
+}
+
+type TaskkillRunner = (command: string, args: string[], options: Parameters<typeof spawnSync>[2]) => SpawnSyncReturns<Buffer>;
 
 export const nodeProcessRunner: ProcessRunner = (request) =>
   new Promise((resolve, reject) => {
@@ -44,10 +59,13 @@ export const nodeProcessRunner: ProcessRunner = (request) =>
     let stdout = "";
     let stderr = "";
     let timedOut = false;
+    let timeoutTriggeredAfterMs: number | undefined;
+    let killResult: ProcessKillResult | undefined;
 
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill();
+      timeoutTriggeredAfterMs = Date.now() - startedAt;
+      killResult = killTimedOutProcess(child.pid, () => child.kill());
     }, request.timeoutMs);
 
     child.on("error", (error) => {
@@ -72,13 +90,16 @@ export const nodeProcessRunner: ProcessRunner = (request) =>
     });
     child.on("close", (code, signal) => {
       clearTimeout(timer);
+      const closedAfterMs = Date.now() - startedAt;
       resolve({
         stdout,
         stderr,
         exitCode: code ?? undefined,
         signal: signal ?? undefined,
         timedOut,
-        durationMs: Date.now() - startedAt
+        durationMs: closedAfterMs,
+        ...(timedOut ? { timeoutTriggeredAfterMs, closedAfterMs, closeDelayAfterTimeoutMs: timeoutTriggeredAfterMs === undefined ? undefined : closedAfterMs - timeoutTriggeredAfterMs } : {}),
+        ...(killResult ?? {})
       });
     });
 
@@ -90,6 +111,48 @@ export const nodeProcessRunner: ProcessRunner = (request) =>
 
 export function stdioForRequest(request: Pick<ProcessRunRequest, "input">): ProcessRunnerStdio {
   return [request.input ? "pipe" : "ignore", "pipe", "pipe"];
+}
+
+export function killTimedOutProcess(
+  pid: number | undefined,
+  fallbackKill: () => boolean,
+  platform: NodeJS.Platform = process.platform,
+  runTaskkill: TaskkillRunner = spawnSync
+): ProcessKillResult {
+  if (platform === "win32" && pid !== undefined) {
+    const result = runTaskkill("taskkill", ["/PID", String(pid), "/T", "/F"], {
+      stdio: "ignore",
+      shell: false,
+      windowsHide: true
+    });
+    let fallbackError: string | undefined;
+    if (result.error || result.status !== 0) {
+      try {
+        fallbackKill();
+      } catch (error) {
+        fallbackError = error instanceof Error ? error.message : String(error);
+      }
+    }
+    return {
+      processTreeKillAttempted: true,
+      processTreeKillSucceeded: !result.error && result.status === 0,
+      processKillError: result.error?.message ?? fallbackError
+    };
+  }
+
+  try {
+    const killed = fallbackKill();
+    return {
+      processTreeKillAttempted: false,
+      processTreeKillSucceeded: killed
+    };
+  } catch (error) {
+    return {
+      processTreeKillAttempted: false,
+      processTreeKillSucceeded: false,
+      processKillError: error instanceof Error ? error.message : String(error)
+    };
+  }
 }
 
 export function resolveSpawnRequest(request: ProcessRunRequest): ResolvedSpawnRequest {

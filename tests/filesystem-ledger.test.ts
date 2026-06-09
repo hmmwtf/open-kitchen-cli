@@ -435,6 +435,63 @@ describe("FilesystemLedger", () => {
     expect(markdown).toContain("Stream parse errors: 1");
   });
 
+  it("writes salvaged partial answer artifacts for timed out provider outputs", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "open-kitchen-ledger-partial-answer-"));
+    const ledger = new FilesystemLedger(root);
+    await ledger.initializeRun({ runId: "run-partial-answer", mode: "prep", prompt: "inspect", adapter: mockAgentAdapterMetadata });
+
+    await ledger.writeAgentOutputs("run-partial-answer", [
+      {
+        taskId: "direct",
+        agentRole: "context_scout",
+        status: "failed",
+        artifactName: "agent-output-direct.md",
+        output: "Codex CLI Adapter did not finish before the configured timeout.",
+        provider: {
+          adapterName: "codex-cli",
+          provider: "openai",
+          surface: "subprocess",
+          durationMs: 25000,
+          timedOut: true,
+          timeoutMs: 15000,
+          timeoutSource: "request",
+          partialAnswer: {
+            available: true,
+            source: "last_agent_message",
+            length: "Useful partial answer.".length,
+            artifactName: "partial-answer-direct.md",
+            reason: "timed_out_with_last_agent_message"
+          },
+          readability: {
+            finalAnswer: "Useful partial answer.",
+            finalAnswerPreview: "Useful partial answer.",
+            finalAnswerSource: "last_agent_message",
+            warnings: [],
+            commands: [],
+            qualityFlags: ["timed_out_with_answer"],
+            outputSize: {
+              rawLength: 100,
+              extractedTextLength: 22,
+              finalAnswerLength: 22,
+              largeOutput: false,
+              largeOutputThreshold: 100000
+            },
+            artifactRefs: {
+              outputArtifactName: "agent-output-direct.md",
+              partialAnswerArtifactName: "partial-answer-direct.md"
+            }
+          }
+        }
+      }
+    ]);
+
+    const failureArtifact = await readFile(path.join(root, "run-partial-answer", "artifacts", "agent-output-direct.md"), "utf8");
+    const partialArtifact = await readFile(path.join(root, "run-partial-answer", "artifacts", "partial-answer-direct.md"), "utf8");
+
+    expect(failureArtifact).toContain("did not finish before the configured timeout");
+    expect(partialArtifact).toBe("Useful partial answer.");
+  });
+
   it("renders parser-first provider readability while keeping raw output out of result json", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "open-kitchen-ledger-readable-"));
     const ledger = new FilesystemLedger(root);

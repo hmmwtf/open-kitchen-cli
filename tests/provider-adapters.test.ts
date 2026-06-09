@@ -539,6 +539,73 @@ describe("Provider Adapter v1", () => {
     expect(result.provider?.timedOut).toBe(true);
   });
 
+  it("marks timed out structured final answers as salvageable partial answers", async () => {
+    const runner: ProcessRunner = async () => ({
+      stdout: JSON.stringify({
+        type: "item.completed",
+        item: {
+          type: "agent_message",
+          text: "Usable answer before timeout."
+        }
+      }),
+      stderr: "",
+      exitCode: 0,
+      timedOut: true,
+      durationMs: 25000,
+      timeoutTriggeredAfterMs: 15000,
+      closedAfterMs: 25000,
+      closeDelayAfterTimeoutMs: 10000,
+      processTreeKillAttempted: true,
+      processTreeKillSucceeded: false
+    });
+
+    const result = await new CodexCliAgentAdapter(runner).execute({
+      runId: "run-1",
+      task: task(),
+      agentRole: "worker",
+      permissionIntent: "read_only",
+      timeoutMs: 15000
+    });
+
+    expect(result.status).toBe("failed");
+    expect(result.output).toContain("did not finish before the configured timeout");
+    expect(result.provider?.partialAnswer).toEqual({
+      available: true,
+      source: "last_agent_message",
+      length: "Usable answer before timeout.".length,
+      artifactName: "partial-answer-task-1.md",
+      reason: "timed_out_with_last_agent_message"
+    });
+    expect(result.provider?.readability?.qualityFlags).toContain("timed_out_with_answer");
+    expect(result.provider?.readability?.artifactRefs?.partialAnswerArtifactName).toBe("partial-answer-task-1.md");
+    expect(result.provider?.closeDelayAfterTimeoutMs).toBe(10000);
+    expect(result.provider?.processTreeKillAttempted).toBe(true);
+  });
+
+  it("does not mark raw fallback timeout output as a salvageable partial answer", async () => {
+    const runner: ProcessRunner = async () => ({
+      stdout: "plain partial stream",
+      stderr: "",
+      exitCode: undefined,
+      timedOut: true,
+      durationMs: 15000
+    });
+
+    const result = await new CodexCliAgentAdapter(runner).execute({
+      runId: "run-1",
+      task: task(),
+      agentRole: "worker",
+      permissionIntent: "read_only",
+      timeoutMs: 15000
+    });
+
+    expect(result.status).toBe("failed");
+    expect(result.provider?.partialAnswer).toBeUndefined();
+    expect(result.provider?.readability?.finalAnswerSource).toBe("raw_text_fallback");
+    expect(result.provider?.readability?.qualityFlags).toContain("timed_out_without_structured_answer");
+    expect(result.provider?.readability?.qualityFlags).not.toContain("timed_out_with_answer");
+  });
+
   it("records streaming success stats", async () => {
     const runner: ProcessRunner = async (request) => {
       request.onStdout?.(`${JSON.stringify({ text: "hello " })}\n`);

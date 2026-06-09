@@ -196,14 +196,25 @@ function providerSummary(result: LedgerResult): string {
   if (!providerOutput) {
     return "Provider: not available";
   }
+  const timedOutWithAnswer = Boolean(
+    providerOutput.partialAnswer?.available ||
+      (providerOutput.timedOut &&
+        providerOutput.readability?.finalAnswerSource === "last_agent_message" &&
+        providerOutput.readability.finalAnswer?.trim())
+  );
 
   const parts = [
     `${providerOutput.adapterName}/${providerOutput.provider}`,
     `duration ${formatOptionalNumber(providerOutput.durationMs, "ms")}`,
     `timeout ${formatOptionalNumber(providerOutput.timeoutMs, "ms")}`,
     `exit ${providerOutput.exitCode ?? "not available"}`,
-    `timedOut ${providerOutput.timedOut ? "yes" : "no"}`
+    `timedOut ${providerOutput.timedOut ? "yes" : "no"}`,
+    `timedOutWithAnswer ${timedOutWithAnswer ? "yes" : "no"}`,
+    `closeDelayAfterTimeout ${formatOptionalNumber(providerOutput.closeDelayAfterTimeoutMs, "ms")}`
   ];
+  if (providerOutput.partialAnswer?.artifactName) {
+    parts.push(`partialAnswer ${providerOutput.partialAnswer.artifactName}`);
+  }
   return `Provider: ${parts.join(", ")}`;
 }
 
