@@ -202,6 +202,17 @@ describe("Provider Adapter v1", () => {
         ]
       },
       {
+        prompt: "Explain the open-kitchen run command flow.",
+        expected: [
+          "Run command output",
+          "exactly 5 numbered steps",
+          "evidence file",
+          "responsibility",
+          "Do not invent execution steps",
+          "Mark conditional behavior as conditional"
+        ]
+      },
+      {
         prompt: "Write a pitch for OpenKitchen.",
         expected: ["Pitch output: one paragraph only", "prep, cook, taste, banquet", "Do not invent modes"]
       },

@@ -424,6 +424,74 @@ describe("Repository Context Map", () => {
     expect(genericInstantRun.markdown).not.toContain("Technical Debt Evidence:");
   });
 
+  it("selects run command evidence anchors for run-command prompts", async () => {
+    const root = await fixtureRoot();
+    await mkdir(path.join(root, "src", "agents"), { recursive: true });
+    await mkdir(path.join(root, "src", "cli", "commands"), { recursive: true });
+    await writeBaseAnchors(root);
+    await writeFile(path.join(root, "src", "cli", "commands", "run.ts"), "export function registerRunCommand() {}\n", "utf8");
+    await writeFile(path.join(root, "src", "cli", "index.ts"), "export function createProgram() {}\n", "utf8");
+    await writeFile(path.join(root, "src", "core", "run-controller.ts"), "export class RunController {}\n", "utf8");
+    await writeFile(path.join(root, "src", "agents", "provider-adapters.ts"), "export class CodexCliAgentAdapter {}\n", "utf8");
+    await writeFile(path.join(root, "src", "ledger", "filesystem-ledger.ts"), "export class FilesystemLedger {}\n", "utf8");
+
+    const repoMap = await generateRepositoryMap({
+      root,
+      prompt: "run command execution flow",
+      maxChars: 2000,
+      contextAnchors: true,
+      anchorMaxChars: 850
+    });
+
+    expect(repoMap.markdown).toContain("Run Command Evidence:");
+    expect(repoMap.markdown).toContain("Do not invent execution steps");
+    expect(repoMap.markdown).toContain("src/cli/commands/run.ts");
+    expect(repoMap.markdown).toContain("src/cli/index.ts");
+    expect(repoMap.markdown).toContain("src/core/run-controller.ts");
+    expect(repoMap.markdown).toContain("src/agents/provider-adapters.ts");
+    expect(repoMap.markdown).toContain("src/ledger/filesystem-ledger.ts");
+    expect(repoMap.budget.renderedChars).toBeLessThanOrEqual(2000);
+    expect(repoMap.summary.filesIncluded).toBeGreaterThanOrEqual(1);
+    expect(repoMap.summary.symbolsIncluded).toBeGreaterThan(0);
+  });
+
+  it("detects run-command prompts without adding evidence to generic or non-anchor runs", async () => {
+    expect(detectAnchorIntent("run command")).toBe("run-command");
+    expect(detectAnchorIntent("open-kitchen run")).toBe("run-command");
+    expect(detectAnchorIntent("ok prep")).toBe("run-command");
+    expect(detectAnchorIntent("mode shortcut")).toBe("run-command");
+    expect(detectAnchorIntent("shortcut command")).toBe("run-command");
+    expect(detectAnchorIntent("run flow")).toBe("run-command");
+    expect(detectAnchorIntent("execution flow")).toBe("run-command");
+    expect(detectAnchorIntent("\uc2e4\ud589 \ud750\ub984")).toBe("run-command");
+    expect(detectAnchorIntent("\ub3d9\uc791 \ubc29\uc2dd")).toBe("run-command");
+    expect(detectAnchorIntent("\uc5b4\ub5bb\uac8c \ub3d9\uc791")).toBe("run-command");
+    expect(detectAnchorIntent("\ub7f0 \ucee4\ub9e8\ub4dc")).toBe("run-command");
+    expect(detectAnchorIntent("run command bug")).toBe("bug");
+
+    const root = await fixtureRoot();
+    await mkdir(path.join(root, "src", "cli", "commands"), { recursive: true });
+    await writeBaseAnchors(root);
+    await writeFile(path.join(root, "src", "cli", "commands", "run.ts"), "export function registerRunCommand() {}\n", "utf8");
+
+    const nonAnchorRun = await generateRepositoryMap({
+      root,
+      prompt: "run command",
+      maxChars: 2000,
+      contextAnchors: false
+    });
+    const genericInstantRun = await generateRepositoryMap({
+      root,
+      prompt: "summarize this project",
+      maxChars: 2000,
+      contextAnchors: true,
+      anchorMaxChars: 850
+    });
+
+    expect(nonAnchorRun.markdown).not.toContain("Run Command Evidence:");
+    expect(genericInstantRun.markdown).not.toContain("Run Command Evidence:");
+  });
+
   it("selects repository-map anchors for non-bug RepoMap prompts", async () => {
     const root = await fixtureRoot();
     await mkdir(path.join(root, "src", "repository-map"), { recursive: true });

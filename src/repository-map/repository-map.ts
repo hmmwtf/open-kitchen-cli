@@ -101,6 +101,28 @@ const TECH_DEBT_EVIDENCE = [
     lens: "artifact growth, result persistence, schema drift, backward compatibility."
   }
 ] as const;
+const RUN_COMMAND_EVIDENCE = [
+  {
+    path: "src/cli/commands/run.ts",
+    summary: "run options, mode shortcuts, adapter defaults, fast/instant flags, validation, approval, and progress output."
+  },
+  {
+    path: "src/cli/index.ts",
+    summary: "CLI executable entrypoint, Commander program factory, and top-level command registration."
+  },
+  {
+    path: "src/core/run-controller.ts",
+    summary: "run id, ledger path, mode decision, RepoMap generation, adapter execution, and run summary."
+  },
+  {
+    path: "src/agents/provider-adapters.ts",
+    summary: "mock and provider-backed execution, prompt construction, output parsing, and provider metadata."
+  },
+  {
+    path: "src/ledger/filesystem-ledger.ts",
+    summary: "local run/result/provider/repo-map/events/artifact persistence for inspection."
+  }
+] as const;
 
 export interface GenerateRepositoryMapInput {
   root: string;
@@ -242,6 +264,23 @@ export function detectAnchorIntent(prompt: string): AnchorIntent {
   }
   if (has(["bug", "fix", "error", "fail", "timeout", "문제", "오류", "분석"])) {
     return "bug";
+  }
+  if (
+    has([
+      "run command",
+      "open-kitchen run",
+      "ok prep",
+      "mode shortcut",
+      "shortcut command",
+      "run flow",
+      "execution flow",
+      "실행 흐름",
+      "동작 방식",
+      "어떻게 동작",
+      "런 커맨드"
+    ])
+  ) {
+    return "run-command";
   }
   if (has(["pitch", "소개", "한 줄", "30-second", "30 second", "discord", "공유"])) {
     return "pitch";
@@ -746,6 +785,11 @@ async function collectContextAnchors(input: { root: string; intent: AnchorIntent
     if (evidence) {
       blocks.push(truncateBlock(evidence, Math.min(850, maxChars)));
     }
+  } else if (input.intent === "run-command") {
+    const evidence = renderRunCommandEvidenceAnchor(input.root);
+    if (evidence) {
+      blocks.push(truncateBlock(evidence, Math.min(850, maxChars)));
+    }
   } else if (input.intent === "bug") {
     for (const candidate of bugAnchorCandidates(input.bugDomain, input.cliBugSubtype)) {
       if (remainingAnchorBudget(blocks, maxChars) <= 80) {
@@ -812,6 +856,7 @@ function anchorCandidates(intent: AnchorIntent): string[] {
     bug: [],
     "important-files": [],
     "tech-debt": [],
+    "run-command": [],
     pitch: ["README.ko.md", "docs/CLI.md", "docs/ARCHITECTURE.md", "src/cli/index.ts"],
     cli: ["src/cli/index.ts", "src/cli/commands/run.ts", "docs/CLI.md"]
   };
@@ -839,6 +884,18 @@ function renderTechDebtEvidenceAnchor(root: string): string {
     "Technical Debt Evidence:",
     "Use pairs as evidence; no confirmed debt without support.",
     ...existing.map((item) => `- ${item.area}: ${item.pair}. Lens: ${item.lens}`)
+  ].join("\n");
+}
+
+function renderRunCommandEvidenceAnchor(root: string): string {
+  const existing = RUN_COMMAND_EVIDENCE.filter((item) => existsSync(path.join(root, item.path)));
+  if (existing.length === 0) {
+    return "";
+  }
+  return [
+    "Run Command Evidence:",
+    "Use these files as evidence for run/shortcut execution flow. Do not invent execution steps; mark conditional behavior as conditional.",
+    ...existing.map((item) => `- ${item.path}: ${item.summary}`)
   ].join("\n");
 }
 

@@ -447,7 +447,7 @@ function providerPrompt(input: AgentAdapterInput): string {
   ].join("\n");
 }
 
-type InstantOutputIntent = "architecture" | "provider" | "repomap" | "bug" | "important-files" | "tech-debt" | "pitch" | "onboarding" | "generic";
+type InstantOutputIntent = "architecture" | "provider" | "repomap" | "bug" | "important-files" | "tech-debt" | "run-command" | "pitch" | "onboarding" | "generic";
 
 function instantOutputInstruction(prompt: string): string {
   const intentInstruction = instantIntentInstruction(detectInstantOutputIntent(prompt));
@@ -501,6 +501,23 @@ function detectInstantOutputIntent(prompt: string): InstantOutputIntent {
   if (has(["bug", "fix", "error", "fail", "timeout", "problem", "root cause", "technical debt", "risk", "maintenance", "문제", "오류", "원인", "부채", "리스크"])) {
     return "bug";
   }
+  if (
+    has([
+      "run command",
+      "open-kitchen run",
+      "ok prep",
+      "mode shortcut",
+      "shortcut command",
+      "run flow",
+      "execution flow",
+      "실행 흐름",
+      "동작 방식",
+      "어떻게 동작",
+      "런 커맨드"
+    ])
+  ) {
+    return "run-command";
+  }
   if (has(["repomap", "repo map", "repository context", "context map", "repository context map"])) {
     return "repomap";
   }
@@ -527,6 +544,8 @@ function instantIntentInstruction(intent: InstantOutputIntent): string | undefin
       return "Important files output: use a markdown table with columns File | Purpose | Reason. Maximum 5 rows. Choose files only from Important Files Evidence or Repository Context Map. If fewer than 5 files are supported, return fewer rows. Do not invent files.";
     case "tech-debt":
       return 'Tech debt output: use a markdown table with columns Rank | Area | Maintenance Risk | Evidence | Next Check. Return 3-5 ranked risks, from most likely to least likely. Use "may become", "risk", or "needs verification" wording. Do not claim confirmed debt unless evidence supports it. Do not invent missing tests, bugs, files, or failures. If evidence is insufficient, mark the item as needs verification. Use only files from Technical Debt Evidence or Repository Context Map.';
+    case "run-command":
+      return "Run command output: use exactly 5 numbered steps. Each step must include a step name, evidence file, and responsibility. Do not invent execution steps. Mark conditional behavior as conditional. Use only Run Command Evidence or Repository Context Map.";
     case "pitch":
       return "Pitch output: one paragraph only, target 120 English words or 500 Korean characters. Use canonical vocabulary: prep, cook, taste, banquet, local-first, provider-neutral, ledger, instant. Do not invent modes or product terminology.";
     case "onboarding":
