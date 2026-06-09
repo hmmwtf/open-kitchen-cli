@@ -556,7 +556,22 @@ describe("Provider Adapter v1", () => {
       closedAfterMs: 25000,
       closeDelayAfterTimeoutMs: 10000,
       processTreeKillAttempted: true,
-      processTreeKillSucceeded: false
+      processTreeKillSucceeded: false,
+      timedOutPid: 1234,
+      killMethod: "child.kill",
+      killSucceeded: true,
+      taskkillAttempted: true,
+      taskkillExitCode: 1,
+      taskkillStderrPreview: "ERROR: Access is denied.",
+      fallbackKillAttempted: true,
+      fallbackKillSucceeded: true,
+      stdoutLengthAtTimeout: 64,
+      stderrLengthAtTimeout: 0,
+      stdoutLengthAtClose: 96,
+      stderrLengthAtClose: 0,
+      outputGrewAfterTimeout: true,
+      timeoutOverrunMs: 10000,
+      killFailureSummary: "taskkill exited with code 1. Fallback child.kill succeeded."
     });
 
     const result = await new CodexCliAgentAdapter(runner).execute({
@@ -580,6 +595,13 @@ describe("Provider Adapter v1", () => {
     expect(result.provider?.readability?.artifactRefs?.partialAnswerArtifactName).toBe("partial-answer-task-1.md");
     expect(result.provider?.closeDelayAfterTimeoutMs).toBe(10000);
     expect(result.provider?.processTreeKillAttempted).toBe(true);
+    expect(result.provider?.timedOutPid).toBe(1234);
+    expect(result.provider?.taskkillExitCode).toBe(1);
+    expect(result.provider?.taskkillStderrPreview).toContain("Access is denied");
+    expect(result.provider?.fallbackKillSucceeded).toBe(true);
+    expect(result.provider?.outputGrewAfterTimeout).toBe(true);
+    expect(result.provider?.timeoutOverrunMs).toBe(10000);
+    expect(result.provider?.killFailureSummary).toContain("Fallback child.kill succeeded");
   });
 
   it("does not mark raw fallback timeout output as a salvageable partial answer", async () => {

@@ -10,7 +10,8 @@ import {
   quoteForCmd,
   resolveNpmShimScriptPath,
   resolveSpawnRequest,
-  stdioForRequest
+  stdioForRequest,
+  timeoutOutputDiagnostics
 } from "../src/agents/process-runner.js";
 import type { ProcessRunRequest } from "../src/agents/process-runner.js";
 
@@ -146,6 +147,9 @@ describe("Process runner spawn request resolution", () => {
     expect(result.timeoutTriggeredAfterMs).toBeGreaterThanOrEqual(0);
     expect(result.closedAfterMs).toBeGreaterThanOrEqual(result.timeoutTriggeredAfterMs ?? 0);
     expect(result.closeDelayAfterTimeoutMs).toBeGreaterThanOrEqual(0);
+    expect(result.timeoutOverrunMs).toBeGreaterThanOrEqual(0);
+    expect(result.stdoutLengthAtTimeout).toBeDefined();
+    expect(result.stderrLengthAtClose).toBeDefined();
   });
 
   it("uses taskkill for Windows process tree timeouts and does not call fallback when it succeeds", () => {
@@ -160,13 +164,23 @@ describe("Process runner spawn request resolution", () => {
       "win32",
       (command, args) => {
         calls.push({ command, args });
-        return { status: 0, signal: null, output: [], pid: 1, stdout: Buffer.from(""), stderr: Buffer.from("") };
+        return { status: 0, signal: null, output: [], pid: 1, stdout: Buffer.from("SUCCESS"), stderr: Buffer.from("") };
       }
     );
 
     expect(calls).toEqual([{ command: "taskkill", args: ["/PID", "1234", "/T", "/F"] }]);
     expect(fallbackCalled).toBe(false);
-    expect(result).toEqual({ processTreeKillAttempted: true, processTreeKillSucceeded: true, processKillError: undefined });
+    expect(result).toMatchObject({
+      processTreeKillAttempted: true,
+      processTreeKillSucceeded: true,
+      timedOutPid: 1234,
+      killMethod: "taskkill",
+      killSucceeded: true,
+      taskkillAttempted: true,
+      taskkillExitCode: 0,
+      taskkillStdoutPreview: "SUCCESS",
+      fallbackKillAttempted: false
+    });
   });
 
   it("falls back to child.kill when Windows taskkill fails", () => {
@@ -178,12 +192,69 @@ describe("Process runner spawn request resolution", () => {
         return true;
       },
       "win32",
-      () => ({ status: 1, signal: null, output: [], pid: 1, stdout: Buffer.from(""), stderr: Buffer.from("") })
+      () => ({ status: 1, signal: null, output: [], pid: 1, stdout: Buffer.from(""), stderr: Buffer.from("ERROR: Access is denied.") })
     );
 
     expect(fallbackCalled).toBe(true);
     expect(result.processTreeKillAttempted).toBe(true);
     expect(result.processTreeKillSucceeded).toBe(false);
+    expect(result.killMethod).toBe("child.kill");
+    expect(result.killSucceeded).toBe(true);
+    expect(result.taskkillExitCode).toBe(1);
+    expect(result.taskkillStderrPreview).toContain("Access is denied");
+    expect(result.fallbackKillAttempted).toBe(true);
+    expect(result.fallbackKillSucceeded).toBe(true);
+    expect(result.killFailureSummary).toContain("Fallback child.kill succeeded");
+  });
+
+  it("records taskkill spawn errors and fallback kill failures", () => {
+    const result = killTimedOutProcess(
+      1234,
+      () => {
+        throw new Error("fallback failed");
+      },
+      "win32",
+      () => ({
+        status: null,
+        signal: null,
+        output: [],
+        pid: 1,
+        stdout: Buffer.from(""),
+        stderr: Buffer.from(""),
+        error: new Error("spawn taskkill ENOENT")
+      })
+    );
+
+    expect(result.taskkillError).toBe("spawn taskkill ENOENT");
+    expect(result.fallbackKillAttempted).toBe(true);
+    expect(result.fallbackKillSucceeded).toBe(false);
+    expect(result.fallbackKillError).toBe("fallback failed");
+    expect(result.killSucceeded).toBe(false);
+    expect(result.killFailureSummary).toContain("spawn taskkill ENOENT");
+  });
+
+  it("computes whether output grew after timeout", () => {
+    expect(
+      timeoutOutputDiagnostics({
+        stdoutLengthAtTimeout: 5,
+        stderrLengthAtTimeout: 1,
+        stdoutLengthAtClose: 9,
+        stderrLengthAtClose: 1
+      }).outputGrewAfterTimeout
+    ).toBe(true);
+  });
+
+  it("does not include timeout kill diagnostics for non-timeout runs", async () => {
+    const result = await nodeProcessRunner({
+      command: process.execPath,
+      args: ["-e", "console.log('ok')"],
+      timeoutMs: 1000
+    });
+
+    expect(result.timedOut).toBe(false);
+    expect(result.killMethod).toBeUndefined();
+    expect(result.timeoutOverrunMs).toBeUndefined();
+    expect(result.stdoutLengthAtTimeout).toBeUndefined();
   });
 });
 

@@ -229,7 +229,12 @@ describe("CLI smoke tests", () => {
     expect(output).toContain("timedOut yes");
     expect(output).toContain("timedOutWithAnswer yes");
     expect(output).toContain("closeDelayAfterTimeout 10000ms");
+    expect(output).toContain("timeoutOverrun 10000ms");
     expect(output).toContain("partialAnswer partial-answer-direct.md");
+    expect(output).toContain("Kill: pid 1234");
+    expect(output).toContain("taskkill failed exit=1");
+    expect(output).toContain("fallback child.kill true");
+    expect(output).toContain("Taskkill stderr: ERROR: Access is denied.");
     expect(output).toContain("Salvaged answer.");
   });
 
@@ -289,6 +294,9 @@ describe("CLI smoke tests", () => {
       timedOut: true,
       timeoutWithAnswer: true,
       closeDelayAfterTimeoutMs: 14000,
+      timeoutOverrunMs: 14000,
+      killAttempted: true,
+      killSucceeded: false,
       rawOutput: "RAW_BODY_SHOULD_NOT_PRINT",
       finalAnswer: "FINAL_BODY_SHOULD_NOT_PRINT",
       filesIncluded: 2,
@@ -329,6 +337,11 @@ describe("CLI smoke tests", () => {
     expect(output).toContain("Avg provider: 12.00s");
     expect(output).toContain("Avg commands: 0.5");
     expect(output).toContain("Avg close delay after timeout: 14.00s");
+    expect(output).toContain("Timeout kill attempted: 1");
+    expect(output).toContain("Timeout kill succeeded: 0");
+    expect(output).toContain("Timeout kill failed: 1");
+    expect(output).toContain("Max close delay after timeout: 14.00s");
+    expect(output).toContain("Avg timeout overrun: 14.00s");
     expect(output).toContain("By Adapter");
     expect(output).toContain("codex-cli | 2 | 1 | 1");
     expect(output).toContain("By Prompt Category");
@@ -373,6 +386,7 @@ describe("CLI smoke tests", () => {
       byAdapter: Array<{ key: string; runs: number }>;
       byPromptCategory: Array<{ key: string; runs: number }>;
       instantQualityProxies: { inferredInstantRuns: number };
+      timeoutKill: { attempted: number; succeeded: number; failed: number };
     };
     expect(parsed.skippedCount).toBe(1);
     expect(parsed.partialCount).toBe(1);
@@ -383,6 +397,7 @@ describe("CLI smoke tests", () => {
     expect(parsed.byAdapter).toContainEqual(expect.objectContaining({ key: "codex-cli", runs: 1 }));
     expect(parsed.byPromptCategory).toContainEqual(expect.objectContaining({ key: "provider", runs: 1 }));
     expect(parsed.instantQualityProxies.inferredInstantRuns).toBe(0);
+    expect(parsed.timeoutKill).toEqual(expect.objectContaining({ attempted: 0, succeeded: 0, failed: 0 }));
   });
 
   it.each([
@@ -786,6 +801,16 @@ describe("CLI smoke tests", () => {
         timeoutSource: "request",
         timedOut: true,
         closeDelayAfterTimeoutMs: 10000,
+        timeoutOverrunMs: 10000,
+        timedOutPid: 1234,
+        killMethod: "child.kill",
+        killSucceeded: true,
+        taskkillAttempted: true,
+        taskkillExitCode: 1,
+        taskkillStderrPreview: "ERROR: Access is denied.",
+        fallbackKillAttempted: true,
+        fallbackKillSucceeded: true,
+        killFailureSummary: "taskkill exited with code 1. Fallback child.kill succeeded.",
         partialAnswer: {
           available: true,
           source: "last_agent_message",
@@ -881,6 +906,9 @@ describe("CLI smoke tests", () => {
       timedOut?: boolean;
       timeoutWithAnswer?: boolean;
       closeDelayAfterTimeoutMs?: number;
+      timeoutOverrunMs?: number;
+      killAttempted?: boolean;
+      killSucceeded?: boolean;
       commandEvents?: number;
       rawOutput?: string;
       finalAnswer?: string;
@@ -941,6 +969,11 @@ describe("CLI smoke tests", () => {
                       timeoutSource: "request",
                       timedOut: input.timedOut,
                       closeDelayAfterTimeoutMs: input.closeDelayAfterTimeoutMs,
+                      timeoutOverrunMs: input.timeoutOverrunMs,
+                      processTreeKillAttempted: input.killAttempted,
+                      processTreeKillSucceeded: input.killSucceeded,
+                      killSucceeded: input.killSucceeded,
+                      taskkillAttempted: input.killAttempted,
                       partialAnswer: input.timeoutWithAnswer
                         ? {
                             available: true,

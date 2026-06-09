@@ -239,6 +239,25 @@ export function providerMetadataBase(input: {
   processTreeKillAttempted?: boolean;
   processTreeKillSucceeded?: boolean;
   processKillError?: string;
+  timedOutPid?: number;
+  killMethod?: "taskkill" | "child.kill" | "none";
+  killSucceeded?: boolean;
+  taskkillAttempted?: boolean;
+  taskkillExitCode?: number;
+  taskkillSignal?: string;
+  taskkillError?: string;
+  taskkillStdoutPreview?: string;
+  taskkillStderrPreview?: string;
+  fallbackKillAttempted?: boolean;
+  fallbackKillSucceeded?: boolean;
+  fallbackKillError?: string;
+  stdoutLengthAtTimeout?: number;
+  stderrLengthAtTimeout?: number;
+  stdoutLengthAtClose?: number;
+  stderrLengthAtClose?: number;
+  outputGrewAfterTimeout?: boolean;
+  timeoutOverrunMs?: number;
+  killFailureSummary?: string;
   partialAnswer?: ProviderPartialAnswerMetadata;
   streamStats?: ProviderStreamStats;
   readability?: ProviderOutputReadability;
@@ -259,6 +278,25 @@ export function providerMetadataBase(input: {
   processTreeKillAttempted?: boolean;
   processTreeKillSucceeded?: boolean;
   processKillError?: string;
+  timedOutPid?: number;
+  killMethod?: "taskkill" | "child.kill" | "none";
+  killSucceeded?: boolean;
+  taskkillAttempted?: boolean;
+  taskkillExitCode?: number;
+  taskkillSignal?: string;
+  taskkillError?: string;
+  taskkillStdoutPreview?: string;
+  taskkillStderrPreview?: string;
+  fallbackKillAttempted?: boolean;
+  fallbackKillSucceeded?: boolean;
+  fallbackKillError?: string;
+  stdoutLengthAtTimeout?: number;
+  stderrLengthAtTimeout?: number;
+  stdoutLengthAtClose?: number;
+  stderrLengthAtClose?: number;
+  outputGrewAfterTimeout?: boolean;
+  timeoutOverrunMs?: number;
+  killFailureSummary?: string;
   partialAnswer?: ProviderPartialAnswerMetadata;
   streamStats?: ProviderStreamStats;
   readability?: ProviderOutputReadability;
@@ -280,6 +318,25 @@ export function providerMetadataBase(input: {
     processTreeKillAttempted: input.processTreeKillAttempted,
     processTreeKillSucceeded: input.processTreeKillSucceeded,
     processKillError: input.processKillError,
+    timedOutPid: input.timedOutPid,
+    killMethod: input.killMethod,
+    killSucceeded: input.killSucceeded,
+    taskkillAttempted: input.taskkillAttempted,
+    taskkillExitCode: input.taskkillExitCode,
+    taskkillSignal: input.taskkillSignal,
+    taskkillError: input.taskkillError,
+    taskkillStdoutPreview: input.taskkillStdoutPreview,
+    taskkillStderrPreview: input.taskkillStderrPreview,
+    fallbackKillAttempted: input.fallbackKillAttempted,
+    fallbackKillSucceeded: input.fallbackKillSucceeded,
+    fallbackKillError: input.fallbackKillError,
+    stdoutLengthAtTimeout: input.stdoutLengthAtTimeout,
+    stderrLengthAtTimeout: input.stderrLengthAtTimeout,
+    stdoutLengthAtClose: input.stdoutLengthAtClose,
+    stderrLengthAtClose: input.stderrLengthAtClose,
+    outputGrewAfterTimeout: input.outputGrewAfterTimeout,
+    timeoutOverrunMs: input.timeoutOverrunMs,
+    killFailureSummary: input.killFailureSummary,
     partialAnswer: input.partialAnswer,
     streamStats: input.streamStats,
     readability: input.readability

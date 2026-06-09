@@ -210,12 +210,49 @@ function providerSummary(result: LedgerResult): string {
     `exit ${providerOutput.exitCode ?? "not available"}`,
     `timedOut ${providerOutput.timedOut ? "yes" : "no"}`,
     `timedOutWithAnswer ${timedOutWithAnswer ? "yes" : "no"}`,
-    `closeDelayAfterTimeout ${formatOptionalNumber(providerOutput.closeDelayAfterTimeoutMs, "ms")}`
+    `closeDelayAfterTimeout ${formatOptionalNumber(providerOutput.closeDelayAfterTimeoutMs, "ms")}`,
+    `timeoutOverrun ${formatOptionalNumber(providerOutput.timeoutOverrunMs, "ms")}`
   ];
   if (providerOutput.partialAnswer?.artifactName) {
     parts.push(`partialAnswer ${providerOutput.partialAnswer.artifactName}`);
   }
-  return `Provider: ${parts.join(", ")}`;
+  const lines = [`Provider: ${parts.join(", ")}`];
+  const killDiagnostics = providerKillDiagnostics(providerOutput);
+  if (killDiagnostics) {
+    lines.push(killDiagnostics);
+  }
+  if (providerOutput.taskkillStderrPreview) {
+    lines.push(`Taskkill stderr: ${previewText(providerOutput.taskkillStderrPreview, 240)}`);
+  }
+  return lines.join("\n");
+}
+
+function providerKillDiagnostics(providerOutput: NonNullable<LedgerResult["outputs"][number]["provider"]>): string | undefined {
+  const hasKillDiagnostics =
+    providerOutput.timedOutPid !== undefined ||
+    providerOutput.killMethod !== undefined ||
+    providerOutput.taskkillAttempted !== undefined ||
+    providerOutput.fallbackKillAttempted !== undefined ||
+    providerOutput.killSucceeded !== undefined ||
+    providerOutput.processTreeKillAttempted !== undefined;
+  if (!hasKillDiagnostics) {
+    return undefined;
+  }
+
+  const taskkill = providerOutput.taskkillAttempted
+    ? `taskkill ${providerOutput.taskkillExitCode === 0 ? "succeeded" : "failed"}${providerOutput.taskkillExitCode !== undefined ? ` exit=${providerOutput.taskkillExitCode}` : ""}`
+    : "taskkill not attempted";
+  const fallback = providerOutput.fallbackKillAttempted
+    ? `fallback child.kill ${providerOutput.fallbackKillSucceeded ? "true" : "false"}`
+    : "fallback child.kill not attempted";
+  const summary = providerOutput.killFailureSummary ? `, summary ${providerOutput.killFailureSummary}` : "";
+  return [
+    `Kill: pid ${providerOutput.timedOutPid ?? "not available"}`,
+    `method ${providerOutput.killMethod ?? "not available"}`,
+    `succeeded ${providerOutput.killSucceeded ? "yes" : "no"}`,
+    taskkill,
+    fallback
+  ].join(", ") + summary;
 }
 
 async function repoMapSummary(result: LedgerResult, runPath: string): Promise<string> {

@@ -28,6 +28,10 @@ interface RunStatsSample {
   timeoutWithAnswer: boolean;
   timeoutWithoutStructuredAnswer: boolean;
   closeDelayAfterTimeoutMs?: number;
+  timeoutOverrunMs?: number;
+  killAttempted: boolean;
+  killSucceeded?: boolean;
+  killFailed: boolean;
   rawOutputLength?: number;
   finalAnswerLength?: number;
   filesIncluded?: number;
@@ -58,6 +62,7 @@ interface StatsReport {
   byAdapter: GroupStats[];
   byPromptCategory: GroupStats[];
   instantQualityProxies: InstantQualityProxies;
+  timeoutKill: TimeoutKillStats;
 }
 
 interface StatsSummary {
@@ -78,6 +83,11 @@ interface StatsSummary {
   timeoutWithAnswerCount: number;
   timeoutWithoutStructuredAnswerCount: number;
   avgCloseDelayAfterTimeoutMs?: number;
+  timeoutKillAttempted: number;
+  timeoutKillSucceeded: number;
+  timeoutKillFailed: number;
+  maxCloseDelayAfterTimeoutMs?: number;
+  avgTimeoutOverrunMs?: number;
 }
 
 interface GroupStats {
@@ -100,6 +110,15 @@ interface InstantQualityProxies {
   avgCloseDelayAfterTimeoutMs?: number;
   avgFilesIncluded?: number;
   avgSymbolsIncluded?: number;
+}
+
+interface TimeoutKillStats {
+  attempted: number;
+  succeeded: number;
+  failed: number;
+  avgCloseDelayAfterTimeoutMs?: number;
+  maxCloseDelayAfterTimeoutMs?: number;
+  avgTimeoutOverrunMs?: number;
 }
 
 export function registerLedgerStatsCommand(program: Command): void {
@@ -144,6 +163,7 @@ async function buildStatsReport(options: LedgerStatsOptions): Promise<StatsRepor
   skippedCount += runs.skipped;
 
   const summary = buildSummary(samples);
+  const timeoutKill = buildTimeoutKillStats(samples);
   return {
     ledger: ledger.getRoot(),
     window: { requestedLimit: limit, validRuns: samples.length },
@@ -161,7 +181,8 @@ async function buildStatsReport(options: LedgerStatsOptions): Promise<StatsRepor
       avgCloseDelayAfterTimeoutMs: average(samples.map((sample) => sample.closeDelayAfterTimeoutMs)),
       avgFilesIncluded: average(samples.map((sample) => sample.filesIncluded)),
       avgSymbolsIncluded: average(samples.map((sample) => sample.symbolsIncluded))
-    }
+    },
+    timeoutKill
   };
 }
 
@@ -230,6 +251,11 @@ async function readRunStatsSample(runPath: string, run: LedgerRunMetadata): Prom
   const timeoutWithAnswer =
     Boolean(providerTimedOut) &&
     (booleanValue(partialAnswer?.available) === true || (finalAnswerSource === "last_agent_message" && (finalAnswerLength ?? 0) > 0));
+  const killAttempted =
+    booleanValue(providerMetadata?.taskkillAttempted) === true ||
+    booleanValue(providerMetadata?.fallbackKillAttempted) === true ||
+    booleanValue(providerMetadata?.processTreeKillAttempted) === true;
+  const killSucceeded = booleanValue(providerMetadata?.killSucceeded) ?? booleanValue(providerMetadata?.processTreeKillSucceeded);
 
   return {
     runId: run.runId,
@@ -249,6 +275,10 @@ async function readRunStatsSample(runPath: string, run: LedgerRunMetadata): Prom
     timeoutWithAnswer,
     timeoutWithoutStructuredAnswer: Boolean(providerTimedOut) && !timeoutWithAnswer,
     closeDelayAfterTimeoutMs: numberValue(providerMetadata?.closeDelayAfterTimeoutMs),
+    timeoutOverrunMs: numberValue(providerMetadata?.timeoutOverrunMs),
+    killAttempted,
+    killSucceeded,
+    killFailed: Boolean(providerTimedOut) && killAttempted && killSucceeded === false,
     rawOutputLength: (await fileSize(path.join(runPath, "artifacts", "provider-raw-output-direct.txt"))) ?? numberValue(outputSizeRecord?.rawLength) ?? providerRaw?.length,
     finalAnswerLength,
     filesIncluded: numberValue(repoSummary?.filesIncluded),
@@ -279,7 +309,23 @@ function buildSummary(samples: RunStatsSample[]): StatsSummary {
     runsOver14s: samples.filter((sample) => (sample.totalDurationMs ?? 0) > OVER_14S_MS).length,
     timeoutWithAnswerCount: samples.filter((sample) => sample.timeoutWithAnswer).length,
     timeoutWithoutStructuredAnswerCount: samples.filter((sample) => sample.timeoutWithoutStructuredAnswer).length,
-    avgCloseDelayAfterTimeoutMs: average(samples.map((sample) => sample.closeDelayAfterTimeoutMs))
+    avgCloseDelayAfterTimeoutMs: average(samples.map((sample) => sample.closeDelayAfterTimeoutMs)),
+    timeoutKillAttempted: samples.filter((sample) => sample.killAttempted).length,
+    timeoutKillSucceeded: samples.filter((sample) => sample.killAttempted && sample.killSucceeded === true).length,
+    timeoutKillFailed: samples.filter((sample) => sample.killFailed).length,
+    maxCloseDelayAfterTimeoutMs: maximum(samples.map((sample) => sample.closeDelayAfterTimeoutMs)),
+    avgTimeoutOverrunMs: average(samples.map((sample) => sample.timeoutOverrunMs))
+  };
+}
+
+function buildTimeoutKillStats(samples: RunStatsSample[]): TimeoutKillStats {
+  return {
+    attempted: samples.filter((sample) => sample.killAttempted).length,
+    succeeded: samples.filter((sample) => sample.killAttempted && sample.killSucceeded === true).length,
+    failed: samples.filter((sample) => sample.killFailed).length,
+    avgCloseDelayAfterTimeoutMs: average(samples.map((sample) => sample.closeDelayAfterTimeoutMs)),
+    maxCloseDelayAfterTimeoutMs: maximum(samples.map((sample) => sample.closeDelayAfterTimeoutMs)),
+    avgTimeoutOverrunMs: average(samples.map((sample) => sample.timeoutOverrunMs))
   };
 }
 
@@ -339,6 +385,11 @@ function printStatsReport(report: StatsReport): void {
   console.log(`Avg final answer: ${formatChars(report.summary.avgFinalAnswerLength)}`);
   console.log(`Runs over 14s: ${report.summary.runsOver14s}`);
   console.log(`Avg close delay after timeout: ${formatMs(report.summary.avgCloseDelayAfterTimeoutMs)}`);
+  console.log(`Timeout kill attempted: ${report.timeoutKill.attempted}`);
+  console.log(`Timeout kill succeeded: ${report.timeoutKill.succeeded}`);
+  console.log(`Timeout kill failed: ${report.timeoutKill.failed}`);
+  console.log(`Max close delay after timeout: ${formatMs(report.timeoutKill.maxCloseDelayAfterTimeoutMs)}`);
+  console.log(`Avg timeout overrun: ${formatMs(report.timeoutKill.avgTimeoutOverrunMs)}`);
   console.log("");
   console.log("By Adapter");
   console.log("Adapter | Runs | Completed | Timeout | Avg Total | Avg Cmds");
@@ -499,6 +550,11 @@ function average(values: Array<number | undefined>): number | undefined {
     return undefined;
   }
   return numbers.reduce((sum, value) => sum + value, 0) / numbers.length;
+}
+
+function maximum(values: Array<number | undefined>): number | undefined {
+  const numbers = values.filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  return numbers.length === 0 ? undefined : Math.max(...numbers);
 }
 
 function rate(count: number, total: number): number {
